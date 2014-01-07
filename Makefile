@@ -1,13 +1,13 @@
-# Shedule Server Makefile
+# Schedule Server Makefile
 
 EC=erlc
-NAME=SheduleServer
+NAME=ScheduleServer
 INCLUDES=-I ./include
 OBJDIR=./ebin
 OUTPUT=-o ./ebin
 FILES=./src/*.erl
 CLEAN=./ebin/*.beam
-RELEASE=\"shedule-release-1\"
+RELEASE=\"schedule-release-1\"
 RELEASE_BUILD="systools:make_script($(RELEASE),[local]),halt()."
 
 all: binaries

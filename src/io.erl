@@ -1,27 +1,27 @@
 %%
 %%  Copyright (C) 2013-2014 Elizaveta Lukicheva.
 %%
-%%  This file is part of Shedule Server.
+%%  This file is part of Schedule Server.
 %%
-%%  Shedule Server is free software: you can redistribute it and/or modify
+%%  Schedule Server is free software: you can redistribute it and/or modify
 %%  it under the terms of the GNU General Public License as published by
 %%  the Free Software Foundation, either version 3 of the License, or
 %%  (at your option) any later version.
 %%
-%%  Shedule Server is distributed in the hope that it will be useful,
+%%  Schedule Server is distributed in the hope that it will be useful,
 %%  but WITHOUT ANY WARRANTY; without even the implied warranty of
 %%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 %%  GNU General Public License for more details.
 %%
 %%  You should have received a copy of the GNU General Public License
-%%  along with Shedule Server.  If not, see <http://www.gnu.org/licenses/>.
+%%  along with Schedule Server.  If not, see <http://www.gnu.org/licenses/>.
 
 %%  Author: Elizaveta Lukicheva <mailto: liza.lukicheva@gmail.com>
 %%  License: <http://www.gnu.org/licenses/gpl.html>
 
 %% @author Elizaveta Lukicheva <liza.lukicheva@gmail.com>
 %% @copyright 2013-2014 Elizaveta Lukicheva
-%% @doc This is the tier 1 Shedule Server packet processor. It receives a raw
+%% @doc This is the tier 1 Schedule Server packet processor. It receives a raw
 %% message from the supervisor (and supervisor receives
 %% it from the acceptor) and handles it.
 
@@ -43,7 +43,7 @@
 %%%     Pid = pid()
 %%%     Error = {already_started,Pid} | term()
 %%%  
-%%% @doc Creates new Shedule Server packet processor.
+%%% @doc Creates new Schedule Server packet processor.
 %%%
 start_link([Socket]) ->
   gen_server:start_link(io, [Socket], []).
