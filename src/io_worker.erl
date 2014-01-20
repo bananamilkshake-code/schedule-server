@@ -25,7 +25,7 @@
 %% message from the supervisor (and supervisor receives
 %% it from the acceptor) and handles it.
 
--module(io).
+-module(io_worker).
 -behaviour(gen_server).
 -include("types.hrl").
 
@@ -46,7 +46,7 @@
 %%% @doc Creates new Schedule Server packet processor.
 %%%
 start_link([Socket]) ->
-  gen_server:start_link(io, [Socket], []).
+  gen_server:start_link(io_worker, [Socket], []).
 
 %%% @spec process(Pid, Message) -> Result
 %%%    Pid = pid()

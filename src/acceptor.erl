@@ -77,7 +77,7 @@ handle_info(Message, {Socket, Acc}) when is_record(Message, tcp) ->
   {ok, SocketIo} = gen_tcp:accept(Socket),
   {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
   gen_tcp:controlling_process(SocketIo, Child),
-  io:process(Child, Message#tcp.data),
+  io_worker:process(Child, Message#tcp.data),
   {noreply, Socket};
   
 handle_info(Data, State) ->

@@ -37,7 +37,7 @@
         main_sup,
         acceptor,
         io_sup,
-        io
+        io_worker
       ]
     },
     {
@@ -46,8 +46,7 @@
         schedule,
         main_sup,
         acceptor,
-        io_sup,
-        io
+        io_sup
       ]
     },
     {

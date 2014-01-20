@@ -82,7 +82,7 @@ init( {MaxR, MaxT, Await} ) ->
       {simple_one_for_one , MaxR, MaxT}, 
       [   
         {   
-          io, {io, start_link, []}, temporary, Await, worker, [io] % See supervisor behaviour articles
+          io_worker, {io_worker, start_link, []}, temporary, Await, worker, [io] % See supervisor behaviour articles
         }
       ]
     }
