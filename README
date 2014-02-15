@@ -1,0 +1,3 @@
+application:start(sasl).
+code:add_patha(''./ebin).
+application:start(schedule).
