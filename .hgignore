@@ -5,3 +5,5 @@ ebin
 *.LOG
 *.log
 *.script
+*.txt
+*.boot
