@@ -31,7 +31,7 @@
 
 %% Handling:
 -export([start_link/1]).
--export([process/2]).
+-export([process/0]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -45,7 +45,7 @@
 %%%  
 %%% @doc Creates new Schedule Server packet processor.
 %%%
-start_link([Socket]) ->
+start_link(Socket) ->
   gen_server:start_link(io_worker, [Socket], []).
 
 %%% @spec process(Pid, Message) -> Result
@@ -58,16 +58,11 @@ start_link([Socket]) ->
 %%% @doc Main parsing routine starter. Calls process/1 via 
 %%% handle_cast to perform asynchronous processing. Pid is
 %%% one associated with the client's tokem in token storage.
-%%%
-process(Pid, Message) when is_record(Message, recv) ->
-  report(1, "Processing message with IO", Pid),
-  report(3, "Message", Message),
-  gen_server:cast(Pid, Message). % -> handle_cast -> process/1.
-  
+
 %% Routines:
   
 %% @doc Main parsing routine of the processor. Parses and handles packet.
-process(Message)  ->
+process()  ->
   {ok, null}.
   
 %% Callbacks:
@@ -79,8 +74,7 @@ init(_) ->
   {ok, null}.
   
 %% @hidden
-handle_cast(Message, _) when is_record(Message, recv) ->
-  process(Message),
+handle_cast(_, Message) when is_record(Message, recv) ->
   {stop, normal, null};
   
 handle_cast(Data, State) ->

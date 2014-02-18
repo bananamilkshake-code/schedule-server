@@ -59,10 +59,13 @@ start_link(Args) ->
 
 %% Callbacks:  
 %% @doc Configures and opens a port and stores it as gen_server internal state.
-init(Args) ->
+init(_) ->
   Port = getenv(tcp_port, "Unable to get TCP port"),
-  {ok, Socket} = gen_tcp:listen(Port, [binary, {active, true}]).
-  
+  report(1, "Listening port with acceptor"),
+  {ok, Socket} = gen_tcp:listen(Port, [binary, {active, true}]),
+  gen_server:cast(self(), accept),
+  {ok, Socket}.
+
 %% @doc closes port at gen_server shutdown.
 terminate(Reason, Socket) ->
   report(1, "Terminating acceptor"), 
@@ -71,29 +74,22 @@ terminate(Reason, Socket) ->
 
 %% @doc Handles message from the port. Since server is in active mode, all the messages are 
 %% comming to the process as special Erlang messages.
-handle_info(Message, {Socket, Acc}) when is_record(Message, tcp) ->
-  report(1, "New packet received"),
-  report(3, "Message", Message),
-  {ok, SocketIo} = gen_tcp:accept(Socket),
-  {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
-  gen_tcp:controlling_process(SocketIo, Child),
-  io_worker:process(Child, Message#tcp.data),
-  {noreply, Socket};
-  
 handle_info(Data, State) ->
   report(0, "Wrong info in Schedule Server acceptor",Data),
   {noreply, State}.
-  
-%% @hidden
+
 handle_call(Data, _, State) ->
   report(0, "Wrong call in Schedule Server acceptor",Data),
   {reply, unknown, State }.
-  
-handle_cast(Data, State) ->
-  report(0, "Wrong cast in Schedule Server acceptor",Data),
-  {noreply, State }.
-  
-%% @hidden Dummy
+
+handle_cast(accept, Socket) ->
+  report(1, "Opening new connection"),
+  {ok, SocketIo} = gen_tcp:accept(Socket),
+  {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
+  gen_tcp:controlling_process(SocketIo, Child),
+  Res = io_worker:process(),
+  {noreply, Res}.
+
 code_change(_, State, _) ->
   report(1, "Code change in Schedule Server acceptor"),
   {ok, State }.
