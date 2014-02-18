@@ -1,3 +1,5 @@
+Запуск:
+elr -pa ebin
+
 application:start(sasl).
-code:add_patha(''./ebin).
 application:start(schedule).
