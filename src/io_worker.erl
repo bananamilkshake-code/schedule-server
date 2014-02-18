@@ -64,12 +64,11 @@ start_link(Socket) ->
 %% @doc Main parsing routine of the processor. Parses and handles packet.
 process()  ->
   {ok, null}.
-  
+
 %% Callbacks:
 
 %% @doc Initializes random generator.
 init(_) ->
-  random:seed(now()),
   report(1, "IO starting"),
   {ok, null}.
   

@@ -24,7 +24,7 @@
 %%% Message sent between processes, it contains source address 
 %%% and port and the raw data of the incoming message.
 -record(recv, 
-    { 
+    {
       from :: {inet:ip_address(), inet:port_number()},
       data :: binary()
     }
@@ -32,18 +32,8 @@
 
 %%% The TCP message received via an active gen_tcp socket.
 -record(tcp, 
-    { 
+    {
       socket,  % = socket()
       data  % = binary()
-    }
-  ).
-
-%%% Database user record
--record(user,
-    {
-        name,
-        second_name,
-        email,
-        password
     }
   ).

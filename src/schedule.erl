@@ -45,7 +45,7 @@ start( _, Timing) ->
   case main_sup:start_link(Timing) of
   ignore ->
     report(0, "Unable to load Schedule Server application", ignore),
-    { error, ignore };
+    {error, ignore};
   Error = {error, _} ->
     report(0, "Unable to load Schedule Server application", Error);
   Ret -> 
@@ -60,5 +60,6 @@ start( _, Timing) ->
 %%% @doc Stops the Schedule Server application.
 %%%
 stop( _ ) ->
+  report(1, "Schedule stopped", ignore),
   error_logger:logfile(close),
   ok.

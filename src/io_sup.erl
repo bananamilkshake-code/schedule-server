@@ -32,7 +32,6 @@
 %% This modue describes callbacks for supervisor starting  
 %% and terminating as well as a worker adding method.
 
-
 -module(io_sup).
 -behaviour(supervisor).
 
@@ -73,9 +72,9 @@ start_link({MaxR, MaxT, Await}) ->
 
 %% Callbacks:
 %%% @private
-%%% @doc Starts simple one-for-one supervisor, producing arya_processor modules.
+%%% @doc Starts simple one-for-one supervisor, producing io_worker modules.
 %%%
-init( {MaxR, MaxT, Await} ) ->
+init({MaxR, MaxT, Await}) ->
   report(1, "IO supervisor starting"),
   {ok, 
     {

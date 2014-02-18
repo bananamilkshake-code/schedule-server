@@ -59,7 +59,7 @@
     { 
       env, 
       [
-        {logfile, { open, "../log.txt"}},
+        {logfile, { open, "./log.txt"}},
         {loglevel, 1},
         {tcp_port, 4567},    % which port socket must bind.
         {max_token, 999999 },   % maximum token to generate.
