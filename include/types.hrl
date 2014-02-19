@@ -23,7 +23,7 @@
 
 %%% Message sent between processes, it contains source address 
 %%% and port and the raw data of the incoming message.
--record(recv, 
+-record(recv,
     {
       from :: {inet:ip_address(), inet:port_number()},
       data :: binary()

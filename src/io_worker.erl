@@ -56,21 +56,19 @@ init(_) ->
 
 handle_cast(_, Message) when is_record(Message, recv) ->
   {stop, normal, null};
-  
-handle_cast(Data, State) ->
-  report(0, "Wrong cast in IO", Data),
-  {noreply, State}.
 
 %% @hidden
-handle_call(Data, _, State) ->
-  report(0, "Wrong sync event in IO",Data),
-  {reply, ok, State}.
+handle_info({tcp, Socket, Message}, State) ->
+  report(1, "Some data", Message),
+  gen_tcp:send(Socket, Message),
+  {noreply, State};
+handle_info({tcp_closed, Socket}, State) ->
+  report(1, "TCP connection was closed", Socket),
+  {stop, normal, State};
+handle_info({tcp_error, Socket}, State) ->
+  report(1, "TCP error occured", Socket),
+  {stop, normal, State}.
 
-%% @hidden
-handle_info(Data, State) ->
-  report(0, "Wrong info in IO",Data),
-  {noreply, State}.
-  
 %% @hidden
 terminate(Reason, _) ->
   report(1, "Terminating IO"), 
