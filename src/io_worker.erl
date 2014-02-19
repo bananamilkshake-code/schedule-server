@@ -31,7 +31,6 @@
 
 %% Handling:
 -export([start_link/1]).
--export([process/0]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -48,31 +47,13 @@
 start_link(Socket) ->
   gen_server:start_link(io_worker, [Socket], []).
 
-%%% @spec process(Pid, Message) -> Result
-%%%    Pid = pid()
-%%%    Message = record(recv)
-%%%    Result = {stop, Reason, null}
-%%%     Reason = normal | {error, Error}
-%%%      Error = term()
-%%%  
-%%% @doc Main parsing routine starter. Calls process/1 via 
-%%% handle_cast to perform asynchronous processing. Pid is
-%%% one associated with the client's tokem in token storage.
-
-%% Routines:
-  
-%% @doc Main parsing routine of the processor. Parses and handles packet.
-process()  ->
-  {ok, null}.
-
 %% Callbacks:
 
 %% @doc Initializes random generator.
 init(_) ->
   report(1, "IO starting"),
   {ok, null}.
-  
-%% @hidden
+
 handle_cast(_, Message) when is_record(Message, recv) ->
   {stop, normal, null};
   

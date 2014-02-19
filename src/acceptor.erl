@@ -87,8 +87,8 @@ handle_cast(accept, Socket) ->
   {ok, SocketIo} = gen_tcp:accept(Socket),
   {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
   gen_tcp:controlling_process(SocketIo, Child),
-  Res = io_worker:process(),
-  {noreply, Res}.
+  report(1, "New connection opened"),  
+  {noreply, null}.
 
 code_change(_, State, _) ->
   report(1, "Code change in Schedule Server acceptor"),
