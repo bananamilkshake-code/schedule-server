@@ -54,8 +54,12 @@ init(_) ->
   report(1, "IO starting"),
   {ok, null}.
 
-handle_cast(_, Message) when is_record(Message, recv) ->
-  {stop, normal, null};
+handle_cast(_, Message) ->
+  {stop, normal, null}.
+
+handle_call(Data, _, State) ->
+  report(0, "Wrong sync event in IO",Data),
+  {reply, ok, State}.
 
 %% @hidden
 handle_info({tcp, Socket, Message}, State) ->
