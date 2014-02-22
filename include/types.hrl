@@ -41,6 +41,7 @@
 %%% The worker state. Handles information about connection
 -record(state,
     {
-      socket
+      socket,
+      buffer    % keep TCP packeet here until whole data received
     }
   ).

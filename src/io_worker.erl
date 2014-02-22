@@ -37,25 +37,6 @@
 -export([handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3]).
 
-do_recv(Socket, Bs) ->
-    case gen_tcp:recv(Socket, 0) of
-        {ok, B} ->
-            do_recv(Socket, [Bs, B]);
-        {error, closed} ->
-            {ok, list_to_binary(Bs)}
-    end.
-
-process(Socket) ->
-  receive
-    {tcp, Socket, Data} ->
-      report(1, "New data was received", Data),
-      gen_tcp:send(Socket, Answer),
-      process(Socket);
-    {tcp_closed, Socket} ->
-      report(1, "TCP connection was closed", Socket),
-      ok
-  end.
-
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
 %%%     Pid = pid()
@@ -67,29 +48,29 @@ start_link(Socket) ->
   gen_server:start_link(io_worker, [Socket], []).
 
 %% Callbacks:
-
-%% @doc Initializes random generator.
 init([Socket]) ->
-  gen_server:cast(self(), process),
   report(1, "IO started"),
-  {ok, #state{socket=Socket}}.
+  {ok, #state{socket=Socket, buffer = <<>>}}.
 
-handle_cast(process, State = #state{socket=Socket}) ->
-  report(1, "Cast"),
-  process(Socket),
+handle_cast(Data, State) ->
+  report(1, "Wrong cast event on IO", Data),
   {stop, normal, State}.
 
 handle_call(Data, _, State) ->
-  report(0, "Wrong sync event in IO",Data),
+  report(0, "Wrong sync event in IO", Data),
   {reply, ok, State}.
 
 %% @hidden
 handle_info({tcp, Socket, Message}, State) ->
   report(1, "Some data", Message),
+  Buffer = State#state.buffer,
+  NewBuffer = <<Buffer/binary, Message/binary>>,
+  NewState = State#state{buffer = NewBuffer},
   gen_tcp:send(Socket, Message),
-  {noreply, State};
+  {noreply, NewState};
 handle_info({tcp_closed, Socket}, State) ->
   report(1, "TCP connection was closed", Socket),
+  report(1, "Handled message", State#state.buffer),
   {stop, normal, State};
 handle_info({tcp_error, Socket}, State) ->
   report(1, "TCP error occured", Socket),

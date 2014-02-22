@@ -62,7 +62,7 @@ start_link(Args) ->
 init(_) ->
   Port = getenv(tcp_port, "Unable to get TCP port"),
   report(1, "Listening port with acceptor"),
-  {ok, Socket} = gen_tcp:listen(Port, [binary, {active, false}]),
+  {ok, Socket} = gen_tcp:listen(Port, [binary, {active, true}]),
   gen_server:cast(self(), accept),
   {ok, Socket}.
 
@@ -80,7 +80,7 @@ handle_info(Data, State) ->
 
 handle_call(Data, _, State) ->
   report(0, "Wrong call in Schedule Server acceptor",Data),
-  {reply, unknown, State }.
+  {reply, unknown, State}.
 
 handle_cast(accept, Socket) ->
   report(1, "Opening new connection"),
