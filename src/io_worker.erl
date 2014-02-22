@@ -62,15 +62,18 @@ handle_call(Data, _, State) ->
 
 %% @hidden
 handle_info({tcp, Socket, Message}, State) ->
-  report(1, "Some data", Message),
   Buffer = State#state.buffer,
   NewBuffer = <<Buffer/binary, Message/binary>>,
-  NewState = State#state{buffer = NewBuffer},
-  gen_tcp:send(Socket, Message),
+  case binary:match(Message, <<"\n">>) of
+    nomatch ->
+      NewState = State#state{buffer = NewBuffer};
+    _Else ->
+      gen_tcp:send(Socket, NewBuffer),
+      NewState = State#state{buffer = <<>>}
+  end,
   {noreply, NewState};
 handle_info({tcp_closed, Socket}, State) ->
   report(1, "TCP connection was closed", Socket),
-  report(1, "Handled message", State#state.buffer),
   {stop, normal, State};
 handle_info({tcp_error, Socket}, State) ->
   report(1, "TCP error occured", Socket),
