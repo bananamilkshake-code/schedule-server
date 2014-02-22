@@ -57,6 +57,13 @@ start_link(Args) ->
     []
   ).
 
+accept(Socket) ->
+  report(1, "Opening new connection"),
+  {ok, SocketIo} = gen_tcp:accept(Socket),
+  {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
+  gen_tcp:controlling_process(SocketIo, Child),
+  accept(Socket).
+
 %% Callbacks:  
 %% @doc Configures and opens a port and stores it as gen_server internal state.
 init(_) ->
@@ -83,10 +90,7 @@ handle_call(Data, _, State) ->
   {reply, unknown, State}.
 
 handle_cast(accept, Socket) ->
-  report(1, "Opening new connection"),
-  {ok, SocketIo} = gen_tcp:accept(Socket),
-  {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
-  gen_tcp:controlling_process(SocketIo, Child),
+  accept(Socket),
   {noreply, null}.
 
 code_change(_, State, _) ->
