@@ -37,3 +37,10 @@
       data  % = binary()
     }
   ).
+
+%%% The worker state. Handles information about connection
+-record(state,
+    {
+      socket
+    }
+  ).

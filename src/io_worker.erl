@@ -37,6 +37,25 @@
 -export([handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3]).
 
+do_recv(Socket, Bs) ->
+    case gen_tcp:recv(Socket, 0) of
+        {ok, B} ->
+            do_recv(Socket, [Bs, B]);
+        {error, closed} ->
+            {ok, list_to_binary(Bs)}
+    end.
+
+process(Socket) ->
+  receive
+    {tcp, Socket, Data} ->
+      report(1, "New data was received", Data),
+      gen_tcp:send(Socket, Answer),
+      process(Socket);
+    {tcp_closed, Socket} ->
+      report(1, "TCP connection was closed", Socket),
+      ok
+  end.
+
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
 %%%     Pid = pid()
@@ -50,12 +69,15 @@ start_link(Socket) ->
 %% Callbacks:
 
 %% @doc Initializes random generator.
-init(_) ->
-  report(1, "IO starting"),
-  {ok, null}.
+init([Socket]) ->
+  gen_server:cast(self(), process),
+  report(1, "IO started"),
+  {ok, #state{socket=Socket}}.
 
-handle_cast(_, Message) ->
-  {stop, normal, null}.
+handle_cast(process, State = #state{socket=Socket}) ->
+  report(1, "Cast"),
+  process(Socket),
+  {stop, normal, State}.
 
 handle_call(Data, _, State) ->
   report(0, "Wrong sync event in IO",Data),
@@ -80,6 +102,6 @@ terminate(Reason, _) ->
   ok.
 
 %% @hidden
-code_change(_, StateData, _) ->
+code_change(_, State, _) ->
   report(1, "Code changing in IO"),
-  {ok, StateData}.
+  {ok, State}.
