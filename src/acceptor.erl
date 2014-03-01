@@ -95,4 +95,4 @@ handle_cast(accept, Socket) ->
 
 code_change(_, State, _) ->
   report(1, "Code change in Schedule Server acceptor"),
-  {ok, State }.
+  {ok, State}.

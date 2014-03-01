@@ -37,6 +37,22 @@
 -export([handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3]).
 
+-define(PACKET_SIZE, 16).
+-define(TYPE_SIZE, 8).
+
+parse(Type, Packet, State) ->
+  case (Type) of
+    0 ->
+      report(1, "Sending back", Packet),
+      report(1, "Socket", State#state.socket),
+      gen_tcp:send(State#state.socket, Packet),
+      true;
+    _Else ->
+      {error, "Wrong packet type"}
+  end,
+  report(1, "Sended"),
+  {noreply, State}.
+
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
 %%%     Pid = pid()
@@ -62,14 +78,30 @@ handle_call(Data, _, State) ->
 
 %% @hidden
 handle_info({tcp, Socket, Message}, State) ->
+  report(1, "Message", Message),
+  MessageSize = bit_size(Message),
+  report(1, "Message size", MessageSize),
   Buffer = State#state.buffer,
   NewBuffer = <<Buffer/binary, Message/binary>>,
-  case binary:match(Message, <<"\n">>) of
-    nomatch ->
-      NewState = State#state{buffer = NewBuffer};
-    _Else ->
-      gen_tcp:send(Socket, NewBuffer),
-      NewState = State#state{buffer = <<>>}
+  Size = bit_size(NewBuffer),
+  report(1, "Size of the handled packet", Size),
+  if
+    Size > ?PACKET_SIZE -> %%% Check if we recieved size of the packet
+      <<PacketSize:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
+      report(1, "Packet size", PacketSize),
+      if
+        Size >= ?PACKET_SIZE + ?TYPE_SIZE + PacketSize -> %%% check if we received whole packet
+          report(1, "data", Data),
+          <<Type:?TYPE_SIZE, Packet:PacketSize/bitstring, LeftData/binary>> = Data,
+          report(1, "Packet data", Packet),
+          NewState = State#state{buffer = LeftData}, %%% saving new buffer
+          parse(Type, Packet, State); %%% parse data from packet
+        true->
+          NewState = State#state{buffer = NewBuffer}
+      end;
+
+    true ->
+      NewState = State#state{buffer = NewBuffer}
   end,
   {noreply, NewState};
 handle_info({tcp_closed, Socket}, State) ->

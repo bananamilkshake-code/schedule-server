@@ -21,15 +21,6 @@
 
 -import(jdb, [report/3, report/2, appenv/3, getenv/2]).
 
-%%% Message sent between processes, it contains source address 
-%%% and port and the raw data of the incoming message.
--record(recv,
-    {
-      from :: {inet:ip_address(), inet:port_number()},
-      data :: binary()
-    }
-  ).
-
 %%% The TCP message received via an active gen_tcp socket.
 -record(tcp, 
     {
@@ -42,6 +33,6 @@
 -record(state,
     {
       socket,
-      buffer    % keep TCP packeet here until whole data received
+      buffer   % keep TCP packeet here until whole data received
     }
   ).
