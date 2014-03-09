@@ -40,18 +40,44 @@
 -define(PACKET_SIZE, 16).
 -define(TYPE_SIZE, 8).
 
+-define(LOGIN, 0).
+
 parse(Type, Packet, State) ->
   case (Type) of
-    0 ->
+    ?LOGIN ->
       report(1, "Sending back", Packet),
-      report(1, "Socket", State#state.socket),
-      gen_tcp:send(State#state.socket, Packet),
-      true;
-    _Else ->
-      {error, "Wrong packet type"}
+      send(0, Packet, State#state.socket),
+      report(1, "Sended");
+    _Else -> false
+  end.
+
+recv(Message, State) ->
+  Buffer = State#state.buffer,
+  NewBuffer = <<Buffer/binary, Message/binary>>,
+  Size = bit_size(NewBuffer),
+  report(1, "Size of the handled packets", Size),
+  if
+    Size > ?PACKET_SIZE -> %%% Check if we recieved size of the packet
+      <<PacketSize:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
+      report(1, "Packet size", PacketSize),
+      if
+        Size >= ?PACKET_SIZE + ?TYPE_SIZE + PacketSize -> %%% check if we received whole packet
+          report(1, "data", Data),
+          <<Type:?TYPE_SIZE, Packet:PacketSize/bitstring, LeftData/binary>> = Data,
+          report(1, "Packet data", Packet),
+          NewState = State#state{buffer = LeftData}, %%% saving new buffer
+          parse(Type, Packet, State); %%% parse data from packet
+        true->
+          NewState = State#state{buffer = NewBuffer}
+      end;
+    true ->
+      NewState = State#state{buffer = NewBuffer}
   end,
-  report(1, "Sended"),
-  {noreply, State}.
+  {ok, NewState}.
+
+send(Type, Data, Socket) ->
+  Size = bit_size(Data),
+  gen_tcp:send(Socket, <<Size:?PACKET_SIZE, Type:?TYPE_SIZE, Data/binary>>).
 
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
@@ -77,32 +103,11 @@ handle_call(Data, _, State) ->
   {reply, ok, State}.
 
 %% @hidden
-handle_info({tcp, Socket, Message}, State) ->
+handle_info({tcp, _Socket, Message}, State) ->
   report(1, "Message", Message),
-  MessageSize = bit_size(Message),
+  MessageSize = byte_size(Message),
   report(1, "Message size", MessageSize),
-  Buffer = State#state.buffer,
-  NewBuffer = <<Buffer/binary, Message/binary>>,
-  Size = bit_size(NewBuffer),
-  report(1, "Size of the handled packet", Size),
-  if
-    Size > ?PACKET_SIZE -> %%% Check if we recieved size of the packet
-      <<PacketSize:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
-      report(1, "Packet size", PacketSize),
-      if
-        Size >= ?PACKET_SIZE + ?TYPE_SIZE + PacketSize -> %%% check if we received whole packet
-          report(1, "data", Data),
-          <<Type:?TYPE_SIZE, Packet:PacketSize/bitstring, LeftData/binary>> = Data,
-          report(1, "Packet data", Packet),
-          NewState = State#state{buffer = LeftData}, %%% saving new buffer
-          parse(Type, Packet, State); %%% parse data from packet
-        true->
-          NewState = State#state{buffer = NewBuffer}
-      end;
-
-    true ->
-      NewState = State#state{buffer = NewBuffer}
-  end,
+  {ok, NewState} = recv(Message, State),
   {noreply, NewState};
 handle_info({tcp_closed, Socket}, State) ->
   report(1, "TCP connection was closed", Socket),
