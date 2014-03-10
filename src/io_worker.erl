@@ -51,7 +51,7 @@ parse(Type, Packet, State) ->
     _Else -> false
   end.
 
-recv(Message, State) ->
+proceed(Message, State) ->
   Buffer = State#state.buffer,
   NewBuffer = <<Buffer/binary, Message/binary>>,
   Size = bit_size(NewBuffer),
@@ -104,10 +104,7 @@ handle_call(Data, _, State) ->
 
 %% @hidden
 handle_info({tcp, _Socket, Message}, State) ->
-  report(1, "Message", Message),
-  MessageSize = byte_size(Message),
-  report(1, "Message size", MessageSize),
-  {ok, NewState} = recv(Message, State),
+  {ok, NewState} = proceed(Message, State),
   {noreply, NewState};
 handle_info({tcp_closed, Socket}, State) ->
   report(1, "TCP connection was closed", Socket),
