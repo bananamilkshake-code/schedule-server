@@ -27,7 +27,9 @@
 
 -module(io_worker).
 -behaviour(gen_server).
+
 -include("types.hrl").
+-include("enums.hrl").
 
 %% Handling:
 -export([start_link/1]).
@@ -40,16 +42,15 @@
 -define(PACKET_SIZE, 16).
 -define(TYPE_SIZE, 8).
 
--define(LOGIN, 0).
+login(_Data, State) ->
+  Answer = <<?LOGIN_SUCCESS:8>>,
+  send(?SERVER_LOGIN, Answer, State#state.socket).
 
-parse(Type, Packet, State) ->
-  case (Type) of
-    ?LOGIN ->
-      report(1, "Sending back", Packet),
-      send(0, Packet, State#state.socket),
-      report(1, "Sended");
-    _Else -> false
-  end.
+parse(Type, Packet, State) when Type =:= ?CLIENT_LOGIN ->
+  login(Packet, State);
+parse(Type, _, State) ->
+  report(1, "Wrong packet type", Type),
+  {stop, normal, State}.
 
 proceed(Message, State) ->
   Buffer = State#state.buffer,
@@ -57,16 +58,15 @@ proceed(Message, State) ->
   Size = bit_size(NewBuffer),
   report(1, "Size of the handled packets", Size),
   if
-    Size > ?PACKET_SIZE -> %%% Check if we recieved size of the packet
+    Size > ?PACKET_SIZE ->    %%% Check if we recieved size of the packet
       <<PacketSize:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
       report(1, "Packet size", PacketSize),
       if
         Size >= ?PACKET_SIZE + ?TYPE_SIZE + PacketSize -> %%% check if we received whole packet
-          report(1, "data", Data),
           <<Type:?TYPE_SIZE, Packet:PacketSize/bitstring, LeftData/binary>> = Data,
           report(1, "Packet data", Packet),
-          NewState = State#state{buffer = LeftData}, %%% saving new buffer
-          parse(Type, Packet, State); %%% parse data from packet
+          parse(Type, Packet, State), %%% parse data from packet
+          NewState = State#state{buffer = LeftData}; %%% saving new buffer
         true->
           NewState = State#state{buffer = NewBuffer}
       end;
@@ -77,7 +77,7 @@ proceed(Message, State) ->
 
 send(Type, Data, Socket) ->
   Size = bit_size(Data),
-  gen_tcp:send(Socket, <<Size:?PACKET_SIZE, Type:?TYPE_SIZE, Data/binary>>).
+  gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
 
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
