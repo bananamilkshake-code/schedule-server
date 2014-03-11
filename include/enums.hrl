@@ -26,10 +26,12 @@
 %% it from the acceptor) and handles it.
 
 %%% Server's packets
--define(SERVER_LOGIN, 0).
+-define(SERVER_REGISTER, 1).
+-define(SERVER_LOGIN, 1).
 
 %%% Client's packets
--define(CLIENT_LOGIN, 0).
+-define(CLIENT_REGISTER, 0).
+-define(CLIENT_LOGIN, 1).
 
 %%% Login status
 -define(LOGIN_SUCCESS, 0).
