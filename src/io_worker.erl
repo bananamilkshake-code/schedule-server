@@ -55,15 +55,15 @@ parse(Type, _, State) ->
 proceed(Message, State) ->
   Buffer = State#state.buffer,
   NewBuffer = <<Buffer/binary, Message/binary>>,
-  Size = bit_size(NewBuffer),
-  report(1, "Size of the handled packets", Size),
+  BufferSize = bit_size(NewBuffer),
+  report(1, "Size of the handled packets", BufferSize),
   if
-    Size > ?PACKET_SIZE ->    %%% Check if we recieved size of the packet
-      <<PacketSize:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
-      report(1, "Packet size", PacketSize),
+    BufferSize > ?TYPE_SIZE + ?PACKET_SIZE ->    %%% Check if we recieved size of the packet
+      <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
+      report(1, "Packet size", Size),
       if
-        Size >= ?PACKET_SIZE + ?TYPE_SIZE + PacketSize -> %%% check if we received whole packet
-          <<Type:?TYPE_SIZE, Packet:PacketSize/bitstring, LeftData/binary>> = Data,
+        BufferSize >= ?PACKET_SIZE + ?TYPE_SIZE + Size -> %%% check if we received whole packet
+          <<Packet:Size/bitstring, LeftData/binary>> = Data,
           report(1, "Packet data", Packet),
           parse(Type, Packet, State), %%% parse data from packet
           NewState = State#state{buffer = LeftData}; %%% saving new buffer
