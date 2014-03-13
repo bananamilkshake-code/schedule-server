@@ -69,7 +69,7 @@ accept(Socket) ->
 init(_) ->
   Port = getenv(tcp_port, "Unable to get TCP port"),
   report(1, "Listening port with acceptor"),
-  {ok, Socket} = gen_tcp:listen(Port, [binary, {active, true}]),
+  {ok, Socket} = gen_tcp:listen(Port, [binary, {active, true}, {reuseaddr, true}]),
   gen_server:cast(self(), accept),
   {ok, Socket}.
 
