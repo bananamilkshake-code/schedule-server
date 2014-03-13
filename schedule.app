@@ -34,6 +34,7 @@
       registered,
       [
         schedule,
+        database,
         main_sup,
         acceptor,
         io_sup,
@@ -44,6 +45,7 @@
       modules, 
       [
         schedule,
+        database,
         main_sup,
         acceptor,
         io_sup
@@ -59,7 +61,8 @@
     { 
       env, 
       [
-        {logfile, { open, "./log.txt"}},
+        {logfile, {open, "../log.txt"}},
+        {database_dir, "../db"},
         {loglevel, 1},
         {tcp_port, 4567},    % which port socket must bind.
         {max_token, 999999 },   % maximum token to generate.

@@ -30,6 +30,9 @@
 %% Debug:
 -import(jdb, [report/3, appenv/3, ret/1]).
 
+%%Database
+-import(database, [start/1, stop/0]).
+
 %% Callbacks:
 -export([start/2, stop/1]).
 
@@ -42,6 +45,8 @@
 %%%
 start( _, Timing) ->
   jdb:configure(),
+  jdb:report(0, "Starting Mnesia database"),
+  database:start([node()]),
   case main_sup:start_link(Timing) of
   ignore ->
     report(0, "Unable to load Schedule Server application", ignore),
@@ -60,6 +65,6 @@ start( _, Timing) ->
 %%% @doc Stops the Schedule Server application.
 %%%
 stop( _ ) ->
-  report(1, "Schedule stopped", ignore),
+  database:stop(),
   error_logger:logfile(close),
   ok.

@@ -30,6 +30,9 @@
 
 -include("types.hrl").
 -include("enums.hrl").
+-include("database.hrl").
+
+-import(database, [add_user/2, check_user/2]).
 
 %% Handling:
 -export([start_link/1]).
@@ -41,11 +44,40 @@
 
 -define(PACKET_SIZE, 16).
 -define(TYPE_SIZE, 8).
+-define(CHAR_SIZE, 8).
+-define(STRING_LENGTH, 16).
 
-login(_Data, State) ->
-  Answer = <<?LOGIN_SUCCESS:8>>,
-  send(?SERVER_LOGIN, Answer, State#state.socket).
+register_user(Data, State) ->
+  <<NameLength:?STRING_LENGTH, Name:NameLength/bitstring, PasswordLength:?STRING_LENGTH, Password:PasswordLength/bitstring>> = Data,
+  case database:check_username(Name) of
+    [] ->
+      AnswerSuccess = <<?REGISTER_SUCCESS:8>>,
+      database:add_user(Name, Password),
+      report(1, "New user registered", Name),
+      send(?SERVER_REGISTER, AnswerSuccess, State#state.socket),
+      {ok, State#state{user=Name}};
+    [User] ->
+      AnswerFailure = <<?REGISTER_FAILURE:8>>,
+      send(?SERVER_REGISTER, AnswerFailure, State#state.socket),
+      {ok, State}
+  end.
 
+login(Data, State) ->
+  <<NameLength:?STRING_LENGTH, Name:NameLength/bitstring, PasswordLength:?STRING_LENGTH, Password:PasswordLength/bitstring>> = Data,
+  case database:check_user(Name, Password) of
+    [] ->
+      Answer = <<?LOGIN_FAILURE:8>>,
+      send(?SERVER_LOGIN, Answer, State#state.socket),
+      {ok, State};
+    [User] ->
+      Answer = <<?LOGIN_SUCCESS:8>>,
+      report(1, "User logined in", Name),
+      send(?SERVER_LOGIN, Answer, State#state.socket),
+      {ok, State#state{user=User}}
+  end.
+
+parse(Type, Packet, State) when Type =:= ?CLIENT_REGISTER ->
+  register_user(Packet, State);
 parse(Type, Packet, State) when Type =:= ?CLIENT_LOGIN ->
   login(Packet, State);
 parse(Type, _, State) ->
@@ -58,15 +90,15 @@ proceed(Message, State) ->
   BufferSize = bit_size(NewBuffer),
   report(1, "Size of the handled packets", BufferSize),
   if
-    BufferSize > ?TYPE_SIZE + ?PACKET_SIZE ->    %%% Check if we recieved size of the packet
-      <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract size of the packet and sended data
+    BufferSize > ?TYPE_SIZE + ?PACKET_SIZE ->    %%% Check if we recieved type and size of the packet
+      <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>> = NewBuffer,  %%% extract type, size and recieved data of the packet
       report(1, "Packet size", Size),
       if
         BufferSize >= ?PACKET_SIZE + ?TYPE_SIZE + Size -> %%% check if we received whole packet
           <<Packet:Size/bitstring, LeftData/binary>> = Data,
           report(1, "Packet data", Packet),
-          parse(Type, Packet, State), %%% parse data from packet
-          NewState = State#state{buffer = LeftData}; %%% saving new buffer
+          {ok, RetState} = parse(Type, Packet, State), %%% parse data from packet and get new state
+          NewState = RetState#state{buffer = LeftData}; %%% saving new buffer
         true->
           NewState = State#state{buffer = NewBuffer}
       end;
@@ -76,6 +108,7 @@ proceed(Message, State) ->
   {ok, NewState}.
 
 send(Type, Data, Socket) ->
+  report(1, "Sending back", Data),
   Size = bit_size(Data),
   gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
 

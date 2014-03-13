@@ -22,17 +22,14 @@
 -import(jdb, [report/3, report/2, appenv/3, getenv/2]).
 
 %%% The TCP message received via an active gen_tcp socket.
--record(tcp, 
-    {
-      socket,  % = socket()
-      data  % = binary()
-    }
-  ).
+-record(tcp, {
+      socket, 
+      data 
+    }).
 
 %%% The worker state. Handles information about connection
--record(state,
-    {
+-record(state, {
       socket,
-      buffer   % keep TCP packeet here until whole data received
-    }
-  ).
+      buffer,   % keep TCP packeet here until whole data received
+      user   % loggined user id
+    }).

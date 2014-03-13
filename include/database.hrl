@@ -19,24 +19,14 @@
 %%  Author: Elizaveta Lukicheva <mailto: liza.lukicheva@gmail.com>
 %%  License: <http://www.gnu.org/licenses/gpl.html>
 
-%% @author Elizaveta Lukicheva <liza.lukicheva@gmail.com>
-%% @copyright 2013-2014 Elizaveta Lukicheva
-%% @doc This is the tier 1 Schedule Server packet processor. It receives a raw
-%% message from the supervisor (and supervisor receives
-%% it from the acceptor) and handles it.
+-record(user, {
+		login,
+		password,
+		last_update,
+		register_time,
+		logout_time}).
 
-%%% Server's packets
--define(SERVER_REGISTER, 0).
--define(SERVER_LOGIN, 1).
-
-%%% Client's packets
--define(CLIENT_REGISTER, 0).
--define(CLIENT_LOGIN, 1).
-
-%%% Register status
--define(REGISTER_SUCCESS, 0).
--define(REGISTER_FAILURE, 1).
-
-%%% Login status
--define(LOGIN_SUCCESS, 0).
--define(LOGIN_FAILURE, 1).
+-record(authorized, {
+		login,
+		socket
+	}).
