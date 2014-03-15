@@ -24,12 +24,10 @@
 %%% The TCP message received via an active gen_tcp socket.
 -record(tcp, {
       socket, 
-      data 
-    }).
+      data}).
 
 %%% The worker state. Handles information about connection
 -record(state, {
       socket,
       buffer,   % keep TCP packeet here until whole data received
-      user   % loggined user id
-    }).
+      user}).   % loggined user id

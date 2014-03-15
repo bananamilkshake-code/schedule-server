@@ -57,13 +57,6 @@ start_link(Args) ->
     []
   ).
 
-accept(Socket) ->
-  report(1, "Opening new connection"),
-  {ok, SocketIo} = gen_tcp:accept(Socket),
-  {ok, Child} = io_sup:start_io(SocketIo), %% Making new worker for that packet.
-  gen_tcp:controlling_process(SocketIo, Child),
-  accept(Socket).
-
 %% Callbacks:  
 %% @doc Configures and opens a port and stores it as gen_server internal state.
 init(_) ->
@@ -82,11 +75,11 @@ terminate(Reason, Socket) ->
 %% @doc Handles message from the port. Since server is in active mode, all the messages are 
 %% comming to the process as special Erlang messages.
 handle_info(Data, State) ->
-  report(0, "Wrong info in Schedule Server acceptor",Data),
+  report(0, "Wrong info in Schedule Server acceptor", Data),
   {noreply, State}.
 
 handle_call(Data, _, State) ->
-  report(0, "Wrong call in Schedule Server acceptor",Data),
+  report(0, "Wrong call in Schedule Server acceptor", Data),
   {reply, unknown, State}.
 
 handle_cast(accept, Socket) ->
@@ -96,3 +89,12 @@ handle_cast(accept, Socket) ->
 code_change(_, State, _) ->
   report(1, "Code change in Schedule Server acceptor"),
   {ok, State}.
+
+%%% @doc Accepting new client connection. Creates new io_worker and delegates 
+%%% client handling to it.
+accept(Socket) ->
+  report(1, "Opening new connection"),
+  {ok, SocketIo} = gen_tcp:accept(Socket),
+  {ok, Child} = io_sup:start_io(SocketIo),
+  gen_tcp:controlling_process(SocketIo, Child),
+  accept(Socket).
