@@ -20,46 +20,79 @@
 %%  License: <http://www.gnu.org/licenses/gpl.html>
 
 -module(database).
+-behaviour(gen_server).
 
 -include("database.hrl").
+
+%% Handling:
+-export([start_link/1]).
+
+%% Callbacks:
+-export([init/1, terminate/2]).
+-export([handle_call/3, handle_info/2, handle_cast/2]).
+-export([code_change/3]).
 
 %% Debug
 -import(jdb, [report/3, report/2, appenv/3, getenv/2]).
 
--export([start/1, stop/0]).
--export([add_user/2, check_username/1, check_user/2]).
+-export([authorize/2, logout/1,
+		add_user/2, check_username/1, check_user/2]).
 
-%% Creating database
-install(Nodes) ->
-	mnesia:create_schema(Nodes),
-	mnesia:create_table(user,
-		[{attributes, record_info(fields, user)}]).
+start_link(Args) ->
+	report(1, "Starting database"),
+  gen_server:start_link(
+    {local, ?MODULE},
+    ?MODULE,
+    Args, 
+    []
+  ).
 
-%% Open already created database.
-start(Nodes) ->
-	error_logger:info_msg("Starting Mnesia database", self()),
-	report(0, "Starting Mnesia database"),
-	Dir = getenv(database_dir, "Unable to get Database Directory"),
-	application:set_env(mnesia, dir, Dir),
-	install(Nodes),
-	ok.
+%% Callbacks:  
+%% @doc Creates database schema and loads data from saved tables
+init([Params]) ->
+	case odbc:connect(Params, []) ->
+		{ok, DBHandler} -> 
+			{ok, DBHandler};
+		{error, Reason} ->
+			{stop, Reason}
+	end.
 
-%% Close database.
-stop() ->
-	ok.
+%% @doc closes port at gen_server shutdown.
+terminate(Reason, DBHandler) ->
+  report(1, "Terminating database"), 
+  report(2, "Reason", Reason),
+  odbc:disconnect(DBHandler).
 
-add_user(Login, Password) ->
-	F = fun() ->
-		mnesia:write(#user{
-			login=Login,
-			password=Password,
-			register_time=calendar:universal_time(),
-			last_update=0,
-			logout_time=0})
-	end,
-	mnesia:activity(transaction, F).
+%% @doc Handles message from the port. Since server is in active mode, all the messages are 
+%% comming to the process as special Erlang messages.
+handle_info(Data, DBHandler) ->
+  report(0, "Wrong info in Schedule Server database", Data),
+  {noreply, DBHandler}.
 
-check_username(Login) ->
+handle_call(Data, From, DBHandler) ->
+  report(0, "Wrong call in Schedule Server database", Data),
+  {reply, unknown, State}.
+
+handle_cast(Data, DBHandler) ->
+  report(0, "Wrong cast in Schedule Server database", Data),
+  {noreply, State}.
+
+code_change(_, State, _) ->
+  report(1, "Code change in Schedule Server database"),
+  {ok, State}.
+
+%%% Add new client to clients list (move to clients supervisor)
+authorize(_Login, _Socket) ->
+	end.
+
+%%% Remove client to clients list (move to clients supervisor)
+logout(_Login) ->
+	end.
+
+add_user(DBHandler, Login, Password) ->
+	.
+
+check_username(DBHandler, Login) ->
 	F = fun() -> 
 		UserMatch = #user{login=Login, _='_'},
 		Guard = [],
@@ -68,7 +101,7 @@ check_username(Login) ->
 	end,
 	mnesia:activity(transaction, F).%%% will return a list of all items that fit the match specification
 
-check_user(Login, Password) ->
+check_user(DBHandler, Login, Password) ->
 	F = fun() -> 
 		UserMatch = #user{login=Login, password=Password, _='_'},
 		Guard = [],
@@ -76,3 +109,5 @@ check_user(Login, Password) ->
 		mnesia:select(user, [{UserMatch	, Guard, Return}])
 	end,
 	mnesia:activity(transaction, F).%%% will return a list of all items that fit the match specification
+
+%%% Private functions

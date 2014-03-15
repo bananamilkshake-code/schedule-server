@@ -45,8 +45,6 @@
 %%%
 start( _, Timing) ->
   jdb:configure(),
-  jdb:report(0, "Starting Mnesia database"),
-  database:start([node()]),
   case main_sup:start_link(Timing) of
   ignore ->
     report(0, "Unable to load Schedule Server application", ignore),
@@ -65,6 +63,5 @@ start( _, Timing) ->
 %%% @doc Stops the Schedule Server application.
 %%%
 stop( _ ) ->
-  database:stop(),
   error_logger:logfile(close),
   ok.

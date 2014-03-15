@@ -62,7 +62,7 @@
       env, 
       [
         {logfile, {open, "../log.txt"}},
-        {database_dir, "../db"},
+        {database_params, "DSN=mysql;DRIVER=MySQL;UID=root;PWD=finncrisporiginal;DATABASE=schedule"},
         {loglevel, 1},
         {tcp_port, 4567},    % which port socket must bind.
         {max_token, 999999 },   % maximum token to generate.
