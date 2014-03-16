@@ -30,9 +30,6 @@
 
 -include("types.hrl").
 -include("enums.hrl").
--include("database.hrl").
-
--import(database, [add_user/2, check_username/2, check_user/2]).
 
 %% Handling:
 -export([start_link/1]).
@@ -76,11 +73,9 @@ handle_info({tcp, _Socket, Message}, State) ->
   {noreply, NewState};
 handle_info({tcp_closed, Socket}, State) ->
   report(1, "TCP connection was closed", Socket),
-  database:logout(State#state.user),
   {stop, normal, State};
 handle_info({tcp_error, Socket}, State) ->
   report(1, "TCP error occured", Socket),
-  database:logout(State#state.user),
   {stop, normal, State}.
 
 %% @hidden
@@ -134,14 +129,17 @@ send(Type, Data, Socket) ->
   gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
 
 register_user(Data, State) ->
-  <<NameLength:?STRING_LENGTH, Name:NameLength/bitstring, PasswordLength:?STRING_LENGTH, Password:PasswordLength/bitstring>> = Data,
+  <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
+  Name = binary_to_list(NameBin),
+  Password = binary_to_list(PasswordBin),
   case database:check_username(Name) of
     [] ->
       AnswerSuccess = <<?REGISTER_SUCCESS:8>>,
-      database:add_user(Name, Password),
+      database:register(Name, Password),
       report(1, "New user registered", Name),
       send(?SERVER_REGISTER, AnswerSuccess, State#state.socket),
-      {ok, State#state{user=Name}};
+      {ok, Id} = auth(Name, Password),
+      {ok, State#state{user=Id}};
     _ ->
       AnswerFailure = <<?REGISTER_FAILURE:8>>,
       send(?SERVER_REGISTER, AnswerFailure, State#state.socket),
@@ -149,15 +147,25 @@ register_user(Data, State) ->
   end.
 
 login(Data, State) ->
-  <<NameLength:?STRING_LENGTH, Name:NameLength/bitstring, PasswordLength:?STRING_LENGTH, Password:PasswordLength/bitstring>> = Data,
-  case database:check_user(Name, Password) of
-    [] ->
+  <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
+  Name = binary_to_list(NameBin),
+  Password = binary_to_list(PasswordBin),
+  case auth(Name, Password) of
+    {error, null} ->
       Answer = <<?LOGIN_FAILURE:8>>,
       send(?SERVER_LOGIN, Answer, State#state.socket),
       {ok, State};
-    [User] ->
+    {ok, Id} ->
       Answer = <<?LOGIN_SUCCESS:8>>,
       report(1, "User logined in", Name),
       send(?SERVER_LOGIN, Answer, State#state.socket),
-      {ok, State#state{user=User}}
+      {ok, State#state{user=Id}}
+  end.
+
+auth(Name, Password) -> 
+  case database:auth(Name, Password) of
+    [] ->
+      {error, null};
+    [Id] ->
+      {ok, Id}
   end.

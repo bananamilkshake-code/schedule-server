@@ -26,7 +26,7 @@
 
 -module(jdb).
 
--export([appenv/3, getenv/2, report/2, report/3, configure/0]).
+-export([appenv/3, getenv/2, report/2, report/3, configure/0, unixtimestamp/0]).
 
 %%% @spec appenv(Name, Function, ErrorMessage) -> term() | undefined
 %%%     Name = atom()
@@ -100,3 +100,7 @@ report(Level, Report, Data) ->
 configure() ->
   appenv(logfile, fun error_logger:logfile/1, "Unable to create log file"),
   appenv(is_tty, fun error_logger:tty/1, "Unable to read tty configuration").
+
+%%% @doc Converts Erlang now() result to unixtimestamp
+unixtimestamp() ->
+  element(1, now()) * 1000000 + element(2, now()).

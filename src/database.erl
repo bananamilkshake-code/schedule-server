@@ -22,10 +22,9 @@
 -module(database).
 -behaviour(gen_server).
 
--include("database.hrl").
-
 %% Handling:
 -export([start_link/1]).
+-export([register/2, check_username/1, auth/2]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -33,24 +32,21 @@
 -export([code_change/3]).
 
 %% Debug
--import(jdb, [report/3, report/2, appenv/3, getenv/2]).
+-import(jdb, [report/3, report/2, appenv/3, getenv/2, unixtimestamp/0]).
 
--export([authorize/2, logout/1,
-		add_user/2, check_username/1, check_user/2]).
-
-start_link(Args) ->
+start_link(Params) ->
 	report(1, "Starting database"),
   gen_server:start_link(
     {local, ?MODULE},
     ?MODULE,
-    Args, 
+    Params, 
     []
   ).
 
 %% Callbacks:  
 %% @doc Creates database schema and loads data from saved tables
-init([Params]) ->
-	case odbc:connect(Params, []) ->
+init(Params) ->
+	case odbc:connect(Params, []) of
 		{ok, DBHandler} -> 
 			{ok, DBHandler};
 		{error, Reason} ->
@@ -69,45 +65,52 @@ handle_info(Data, DBHandler) ->
   report(0, "Wrong info in Schedule Server database", Data),
   {noreply, DBHandler}.
 
-handle_call(Data, From, DBHandler) ->
-  report(0, "Wrong call in Schedule Server database", Data),
-  {reply, unknown, State}.
+handle_call({check_username, Login}, _From, DBHandler) ->
+  Ret = check_username(DBHandler, Login),
+  {reply, Ret, DBHandler};
+handle_call({register, Login, Password}, _From, DBHandler) ->
+  Ret = register(DBHandler, Login, Password),
+  {reply, Ret, DBHandler};
+handle_call({auth, Login, Password}, _From, DBHandler) ->
+  Ret = auth(DBHandler, Login, Password),
+  {reply, Ret, DBHandler};
+handle_call(Call, From, _DBHandler) ->
+  {stop, "Wrong database call", {Call, From}}.
 
 handle_cast(Data, DBHandler) ->
   report(0, "Wrong cast in Schedule Server database", Data),
-  {noreply, State}.
+  {noreply, DBHandler}.
 
-code_change(_, State, _) ->
+code_change(_, DBHandler, _) ->
   report(1, "Code change in Schedule Server database"),
-  {ok, State}.
+  {ok, DBHandler}.
 
-%%% Add new client to clients list (move to clients supervisor)
-authorize(_Login, _Socket) ->
-	end.
+%% Publc
+check_username(Login) ->
+	gen_server:call(?MODULE, {check_username, Login}).
 
-%%% Remove client to clients list (move to clients supervisor)
-logout(_Login) ->
-	end.
+register(Login, Password) ->
+	gen_server:call(?MODULE, {register, Login, Password}).
 
-add_user(DBHandler, Login, Password) ->
-	.
+auth(Login, Password) ->
+	gen_server:call(?MODULE, {auth, Login, Password}).
 
+%% Private
 check_username(DBHandler, Login) ->
-	F = fun() -> 
-		UserMatch = #user{login=Login, _='_'},
-		Guard = [],
-		Return = [login],
-		mnesia:select(user, [{UserMatch	, Guard, Return}])
-	end,
-	mnesia:activity(transaction, F).%%% will return a list of all items that fit the match specification
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT * FROM users WHERE login = ?",
+		[{{sql_varchar, 20}, [Login]}]),
+	Rows.
 
-check_user(DBHandler, Login, Password) ->
-	F = fun() -> 
-		UserMatch = #user{login=Login, password=Password, _='_'},
-		Guard = [],
-		Return = [login],
-		mnesia:select(user, [{UserMatch	, Guard, Return}])
-	end,
-	mnesia:activity(transaction, F).%%% will return a list of all items that fit the match specification
+register(DBHandler, Login, Password) ->
+	{updated, _Count} = odbc:param_query(DBHandler, "INSERT INTO users(login, password, register_time) VALUES (?, ?, ?)",
+		[{{sql_varchar, 20}, [Login]},
+		 {{sql_varchar, 20}, [Password]},
+		 {sql_integer, [unixtimestamp()]}
+		]).
 
-%%% Private functions
+auth(DBHandler, Login, Password) ->
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT id FROM users WHERE login = ? AND password = ?",
+		[{{sql_varchar, 20}, [Login]},
+		 {{sql_varchar, 20}, [Password]}
+		]),
+	Rows.
