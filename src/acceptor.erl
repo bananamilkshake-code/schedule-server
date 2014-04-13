@@ -57,7 +57,7 @@ start_link(Args) ->
     []
   ).
 
-%% Callbacks:  
+%% Callbacks:
 %% @doc Configures and opens a port and stores it as gen_server internal state.
 init(_) ->
   Port = getenv(tcp_port, "Unable to get TCP port"),

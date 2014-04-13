@@ -79,9 +79,10 @@ handle_info({tcp_error, Socket}, State) ->
   {stop, normal, State}.
 
 %% @hidden
-terminate(Reason, _) ->
+terminate(Reason, State) ->
   report(1, "Terminating IO"), 
   report(2, "Reason", Reason),
+  logout(State),
   ok.
 
 %% @hidden
@@ -117,7 +118,7 @@ proceed(Message, State) ->
 parse(Type, Packet, State) when Type =:= ?CLIENT_REGISTER ->
   register_user(Packet, State);
 parse(Type, Packet, State) when Type =:= ?CLIENT_LOGIN ->
-  login(Packet, State);
+  login_user(Packet, State);
 parse(Type, _, State) ->
   report(1, "Wrong packet type", Type),
   {stop, normal, State}.
@@ -138,20 +139,22 @@ register_user(Data, State) ->
       database:register(Name, Password),
       report(1, "New user registered", Name),
       send(?SERVER_REGISTER, AnswerSuccess, State#state.socket),
-      {ok, Id} = auth(Name, Password),
-      {ok, State#state{user=Id}};
+      login(Name, Password, State);
     _ ->
       AnswerFailure = <<?REGISTER_FAILURE:8>>,
       send(?SERVER_REGISTER, AnswerFailure, State#state.socket),
       {ok, State}
   end.
 
-login(Data, State) ->
+login_user(Data, State) ->
   <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Password = binary_to_list(PasswordBin),
-  case auth(Name, Password) of
-    {error, null} ->
+  login(Name, Password, State).
+
+login(Name, Password, State) ->
+  case database:auth(Name, Password) of
+    error ->
       Answer = <<?LOGIN_FAILURE:8>>,
       send(?SERVER_LOGIN, Answer, State#state.socket),
       {ok, State};
@@ -159,13 +162,12 @@ login(Data, State) ->
       Answer = <<?LOGIN_SUCCESS:8>>,
       report(1, "User logined in", Name),
       send(?SERVER_LOGIN, Answer, State#state.socket),
-      {ok, State#state{user=Id}}
+      clients:add(Id, self()),
+      {ok, State#state{user_id=Id}}
   end.
 
-auth(Name, Password) -> 
-  case database:auth(Name, Password) of
-    [] ->
-      {error, null};
-    [Id] ->
-      {ok, Id}
+logout(State) ->
+  if 
+    State#state.user_id == undefined -> ok;
+    true -> clients:remove(State#state.user_id)
   end.

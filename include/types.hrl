@@ -30,4 +30,4 @@
 -record(state, {
       socket,
       buffer,   % keep TCP packeet here until whole data received
-      user}).   % loggined user id
+      user_id}).   % loggined user id

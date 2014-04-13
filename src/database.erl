@@ -53,7 +53,7 @@ init(Params) ->
 			{stop, Reason}
 	end.
 
-%% @doc closes port at gen_server shutdown.
+%% @doc Closes database connection when server stops
 terminate(Reason, DBHandler) ->
   report(1, "Terminating database"), 
   report(2, "Reason", Reason),
@@ -65,6 +65,7 @@ handle_info(Data, DBHandler) ->
   report(0, "Wrong info in Schedule Server database", Data),
   {noreply, DBHandler}.
 
+%% @doc Handles database command
 handle_call({check_username, Login}, _From, DBHandler) ->
   Ret = check_username(DBHandler, Login),
   {reply, Ret, DBHandler};
@@ -108,9 +109,17 @@ register(DBHandler, Login, Password) ->
 		 {sql_integer, [unixtimestamp()]}
 		]).
 
+get_first_column(List, Null) ->
+	case List of
+		[] -> Null;
+		[Row | _] ->
+			I = element(1, Row), 
+			{ok, I}
+	end.
+
 auth(DBHandler, Login, Password) ->
 	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT id FROM users WHERE login = ? AND password = ?",
 		[{{sql_varchar, 20}, [Login]},
 		 {{sql_varchar, 20}, [Password]}
 		]),
-	Rows.
+	get_first_column(Rows, error).

@@ -65,7 +65,8 @@ init({MaxR, MaxT}) ->
       [%<Internal name> <Module name> <Start func> <Arguments> <Restart type> <Exit timeout> <Process type> <Depends>
         {acceptor, {acceptor, start_link, [null]}, transient, 1000, worker, [acceptor]},
         {io_sup, {io_sup, start_link, [{MaxR, MaxT, 100}]}, transient, infinity, supervisor, [io_sup]},
-        {database, {database, start_link, [DatabaseParams]}, transient, 1000, worker, [database]}
+        {database, {database, start_link, [DatabaseParams]}, transient, 1000, worker, [database]},
+        {clients, {clients, start_link, [null]}, transient, 1000, worker, [clients]}
       ]
     }
   }.
