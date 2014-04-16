@@ -59,18 +59,27 @@ init([Socket]) ->
   report(1, "IO started"),
   {ok, #state{socket=Socket, buffer = <<>>}}.
 
+handle_call(Data, _From, State) ->
+  report(0, "Wrong sync event in IO", Data),
+  {reply, ok, State}.
+
+handle_cast({login, Name, Password}, State) ->
+  {ok, NewState} = login(State, Name, Password),
+  {noreply, NewState};
+handle_cast({register, Name, Password}, State) ->
+  {ok, NewState} = register(State, Name, Password),
+  {noreply, NewState};
+handle_cast({new_table, Name, Description}, State) ->
+  {ok, NewState} = new_table(State, Name, Description),
+  {noreply, NewState};
 handle_cast(Data, State) ->
   report(1, "Wrong cast event on IO", Data),
   {stop, normal, State}.
 
-handle_call(Data, _, State) ->
-  report(0, "Wrong sync event in IO", Data),
-  {reply, ok, State}.
-
 %% @hidden
 handle_info({tcp, _Socket, Message}, State) ->
-  {ok, NewState} = proceed(Message, State),
-  {noreply, NewState};
+  {ok, NewBuffer} = proceed(Message, State#state.buffer),
+  {noreply, State#state{buffer=NewBuffer}};
 handle_info({tcp_closed, Socket}, State) ->
   report(1, "TCP connection was closed", Socket),
   {stop, normal, State};
@@ -91,9 +100,9 @@ code_change(_, State, _) ->
   {ok, State}.
 
 %%% @doc Handling received from client packets
-proceed(Message, State) ->
-  Buffer = State#state.buffer,
+proceed(Message, Buffer) ->
   NewBuffer = <<Buffer/binary, Message/binary>>,
+  report(1, "New packet was received", NewBuffer),
   BufferSize = bit_size(NewBuffer),
   report(1, "Size of the handled packets", BufferSize),
   if
@@ -104,24 +113,28 @@ proceed(Message, State) ->
         BufferSize >= ?PACKET_SIZE + ?TYPE_SIZE + Size -> %%% check if we received whole packet
           <<Packet:Size/bitstring, LeftData/binary>> = Data,
           report(1, "Packet data", Packet),
-          {ok, RetState} = parse(Type, Packet, State), %%% parse data from packet and get new state
-          NewState = RetState#state{buffer = LeftData}; %%% saving new buffer
+          handle_packet(Type, Packet), %%% parse data from packet and get new state
+          {ok, LeftData};              %%% saving new buffer
         true->
-          NewState = State#state{buffer = NewBuffer}
+          {ok, NewBuffer}
       end;
     true ->
-      NewState = State#state{buffer = NewBuffer}
-  end,
-  {ok, NewState}.
+      {ok, NewBuffer}
+  end.
 
 %%% @doc Parse client data by packet type
-parse(Type, Packet, State) when Type =:= ?CLIENT_REGISTER ->
-  register_user(Packet, State);
-parse(Type, Packet, State) when Type =:= ?CLIENT_LOGIN ->
-  login_user(Packet, State);
-parse(Type, _, State) ->
+handle_packet(Type, Packet) when Type =:= ?CLIENT_REGISTER ->
+  {ok, Name, Password} = parse(register, Packet),
+  do_register(Name, Password);
+handle_packet(Type, Packet) when Type =:= ?CLIENT_LOGIN ->
+  {ok, Name, Password} = parse(login, Packet),
+  do_login(Name, Password);
+handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TABLE ->
+  {ok, Name, Description} = parse(new_table, Packet),
+  create_new_table(Name, Description);
+handle_packet(Type, _) ->
   report(1, "Wrong packet type", Type),
-  {stop, normal, State}.
+  {stop, normal}.
 
 %%% @doc Sends message to socket
 send(Type, Data, Socket) ->
@@ -129,10 +142,30 @@ send(Type, Data, Socket) ->
   Size = bit_size(Data),
   gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
 
-register_user(Data, State) ->
+parse(login, Data) ->
   <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Password = binary_to_list(PasswordBin),
+  {ok, Name, Password};
+parse(register, Data) ->
+  <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
+  Name = binary_to_list(NameBin),
+  Password = binary_to_list(PasswordBin),
+  {ok, Name, Password};
+parse(new_table, Data) ->
+  <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
+  Name = binary_to_list(NameBin),
+  Description = binary_to_list(DescBin),
+  {ok, Name, Description}.
+
+do_login(Name, Password) ->
+  gen_server:cast(self(), {login, Name, Password}).
+do_register(Name, Password) ->
+  gen_server:cast(self(), {register, Name, Password}).
+create_new_table(Name, Description) ->
+  gen_server:cast(self(), {new_table, Name, Description}).
+
+register(State, Name, Password) ->
   case database:check_username(Name) of
     [] ->
       AnswerSuccess = <<?REGISTER_SUCCESS:8>>,
@@ -146,13 +179,7 @@ register_user(Data, State) ->
       {ok, State}
   end.
 
-login_user(Data, State) ->
-  <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
-  Name = binary_to_list(NameBin),
-  Password = binary_to_list(PasswordBin),
-  login(Name, Password, State).
-
-login(Name, Password, State) ->
+login(State, Name, Password) ->
   case database:auth(Name, Password) of
     error ->
       Answer = <<?LOGIN_FAILURE:8>>,
@@ -165,6 +192,10 @@ login(Name, Password, State) ->
       clients:add(Id, self()),
       {ok, State#state{user_id=Id}}
   end.
+
+new_table(State, Name, Description) ->
+  database:create_new_table(State#state.user_id, Name, Description),
+  {ok, State}.
 
 logout(State) ->
   if 
