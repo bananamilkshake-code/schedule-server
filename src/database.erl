@@ -24,7 +24,7 @@
 
 %% Handling:
 -export([start_link/1]).
--export([register/2, check_username/1, auth/2]).
+-export([register/2, check_username/1, auth/2, create_new_table/3]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -75,6 +75,9 @@ handle_call({register, Login, Password}, _From, DBHandler) ->
 handle_call({auth, Login, Password}, _From, DBHandler) ->
   Ret = auth(DBHandler, Login, Password),
   {reply, Ret, DBHandler};
+handle_call({create_new_table, User, Name, Description}, _From, DBHandler) ->
+  Ret = create_new_table(DBHandler, User, Name, Description),
+  {reply, Ret, DBHandler};
 handle_call(Call, From, _DBHandler) ->
   {stop, "Wrong database call", {Call, From}}.
 
@@ -86,21 +89,30 @@ code_change(_, DBHandler, _) ->
   report(1, "Code change in Schedule Server database"),
   {ok, DBHandler}.
 
+
 %% Publc
 check_username(Login) ->
+	report(1, "Checking username", Login),
 	gen_server:call(?MODULE, {check_username, Login}).
 
 register(Login, Password) ->
+	report(1, "Registering", {Login, Password}),
 	gen_server:call(?MODULE, {register, Login, Password}).
 
 auth(Login, Password) ->
+	report(1, "Checking auth", {Login, Password}),
 	gen_server:call(?MODULE, {auth, Login, Password}).
+
+create_new_table(User, Name, Description) ->
+	report(1, "Creating new table", {User, Name, Description}),
+	gen_server:call(?MODULE, {create_new_table, User, Name, Description}).
+
 
 %% Private
 check_username(DBHandler, Login) ->
 	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT * FROM users WHERE login = ?",
 		[{{sql_varchar, 20}, [Login]}]),
-	Rows.
+	get_first_column(Rows, error).
 
 register(DBHandler, Login, Password) ->
 	{updated, _Count} = odbc:param_query(DBHandler, "INSERT INTO users(login, password, register_time) VALUES (?, ?, ?)",
@@ -111,7 +123,8 @@ register(DBHandler, Login, Password) ->
 
 get_first_column(List, Null) ->
 	case List of
-		[] -> Null;
+		[] -> 
+			Null;
 		[Row | _] ->
 			I = element(1, Row), 
 			{ok, I}
@@ -123,3 +136,20 @@ auth(DBHandler, Login, Password) ->
 		 {{sql_varchar, 20}, [Password]}
 		]),
 	get_first_column(Rows, error).
+
+create_new_table(DBHandler, User, Name, Description) ->
+	{updated, _} = odbc:sql_query(DBHandler, "INSERT INTO tables VALUES()"),
+	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT max(id) AS last_id FROM tables"),
+	{ok, TableId} = get_first_column(Rows, error),
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes VALUES(?, UNIX_TIMESTAMP(), ?, ?, ?)",	
+								[{sql_integer, [TableId]},
+								 {sql_integer, [User]},
+								 {{sql_varchar, 100}, [Name]},
+								 {{sql_varchar, 65535}, [Description]}
+								]),
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers VALUES (?, ?, 1)",
+								[{sql_integer, [User]},
+								 {sql_integer, [TableId]}
+								]),
+	report(1, "New table added", TableId),
+	{ok, TableId}.

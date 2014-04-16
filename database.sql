@@ -1,3 +1,4 @@
+DROP DATABASE IF EXISTS schedule;
 CREATE DATABASE schedule;
 
 CREATE TABLE schedule.users (
@@ -13,14 +14,12 @@ CREATE TABLE schedule.users (
 ); 
 
 CREATE TABLE schedule.tables (
-	id INT(10) AUTO_INCREMENT PRIMARY KEY,
-	last_update INT(10) NOT NULL DEFAULT 0
+	id INT(10) AUTO_INCREMENT PRIMARY KEY
 );
 
 CREATE TABLE schedule.tasks (
 	id INT(10) AUTO_INCREMENT PRIMARY KEY,
 	table_id INT(10) NOT NULL,
-	last_update INT(10) NOT NULL DEFAULT 0,
 
 	FOREIGN KEY (table_id) REFERENCES tables(id)
 );
@@ -40,9 +39,11 @@ CREATE TABLE schedule.table_changes (
 CREATE TABLE schedule.task_changes (
 	task_id INT(10) NOT NULL,
 	table_id INT(10) NOT NULL,
+	time INT(10) NOT NULL,
+	user_id INT(10) NOT NULL,
+
 	name VARCHAR(100),
 	description TEXT,
-
 	completion_date DATE, 
 	start_time TIME,
 	end_time TIME,
@@ -63,17 +64,10 @@ CREATE TABLE schedule.comments (
 	FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
-CREATE TABLE schedule.writers (
-	writer_id INT(10) NOT NULL,
-	table_id INT(10) NOT NULL,
-
-	FOREIGN KEY (writer_id) REFERENCES users(id),
-	FOREIGN KEY (table_id) REFERENCES tables(id)	
-);
-
 CREATE TABLE schedule.readers (
 	reader_id INT(10) NOT NULL,
 	table_id INT(10) NOT NULL,
+	permission TINYINT(1) NOT NULL,
 
 	FOREIGN KEY (reader_id) REFERENCES users(id),
 	FOREIGN KEY (table_id) REFERENCES tables(id)	

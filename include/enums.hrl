@@ -32,6 +32,7 @@
 %%% Client's packets
 -define(CLIENT_REGISTER, 0).
 -define(CLIENT_LOGIN, 1).
+-define(CLIENT_NEW_TABLE, 2).
 
 %%% Register status
 -define(REGISTER_SUCCESS, 0).
