@@ -24,7 +24,9 @@
 
 %% Handling:
 -export([start_link/1]).
--export([register/2, check_username/1, auth/2, create_new_table/3]).
+-export([register/2, check_username/1, auth/2, 
+	create_new_table/3, create_new_task/8, create_commentary/5, 
+	change_table/5, change_task/10, change_permission/3]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -78,6 +80,17 @@ handle_call({auth, Login, Password}, _From, DBHandler) ->
 handle_call({create_new_table, User, Name, Description}, _From, DBHandler) ->
   Ret = create_new_table(DBHandler, User, Name, Description),
   {reply, Ret, DBHandler};
+handle_call({create_new_task, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
+  Ret = create_new_task(DBHandler, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime),
+  {reply, Ret, DBHandler};
+handle_call({create_commentary, _User, _Table, _Task, _Time, _Commentary}, _From, DBHandler) ->
+  {reply, ok, DBHandler};
+handle_call({change_table, _User, _Table, _Time, _Name, _Description}, _From, DBHandler) ->
+  {reply, ok, DBHandler};
+handle_call({change_task, _User, _Table, _Task, _Time, _Name, _Description, _StartDate, _EndDate, _StartTime, _EndTime}, _From, DBHandler) ->
+  {reply, ok, DBHandler};
+handle_call({change_permission, _User, _Table, _Permission}, _From, DBHandler) ->
+  {reply, ok, DBHandler};
 handle_call(Call, From, _DBHandler) ->
   {stop, "Wrong database call", {Call, From}}.
 
@@ -94,19 +107,30 @@ code_change(_, DBHandler, _) ->
 check_username(Login) ->
 	report(1, "Checking username", Login),
 	gen_server:call(?MODULE, {check_username, Login}).
-
 register(Login, Password) ->
 	report(1, "Registering", {Login, Password}),
 	gen_server:call(?MODULE, {register, Login, Password}).
-
 auth(Login, Password) ->
 	report(1, "Checking auth", {Login, Password}),
 	gen_server:call(?MODULE, {auth, Login, Password}).
-
 create_new_table(User, Name, Description) ->
 	report(1, "Creating new table", {User, Name, Description}),
 	gen_server:call(?MODULE, {create_new_table, User, Name, Description}).
-
+create_new_task(User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+	report(1, "Creating new task", {User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}),
+	gen_server:call(?MODULE, {create_new_task, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}).
+create_commentary(User, Table, Task, Time, Commentary) ->
+	report(1, "Create new commentary", {User, Table, Task, Time, Commentary}),
+	gen_server:call(?MODULE, {create_commentary, User, Table, Task, Time, Commentary}).
+change_table(User, Table, Time, Name, Description) ->
+	report(1, "Changing table", {User, Table, Time, Name, Description}),
+	gen_server:call(?MODULE, {change_table, User, Table, Time, Name, Description}).
+change_task(User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+	report(1, "Changing task", {User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}), 
+	gen_server:call(?MODULE, {change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
+change_permission(User, Table, Permission) ->
+	report(1, "Changing permission", {User, Table, Permission}),
+	gen_server:call(?MODULE, {change_permission, User, Table, Permission}).
 
 %% Private
 check_username(DBHandler, Login) ->
@@ -121,15 +145,6 @@ register(DBHandler, Login, Password) ->
 		 {sql_integer, [unixtimestamp()]}
 		]).
 
-get_first_column(List, Null) ->
-	case List of
-		[] -> 
-			Null;
-		[Row | _] ->
-			I = element(1, Row), 
-			{ok, I}
-	end.
-
 auth(DBHandler, Login, Password) ->
 	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT id FROM users WHERE login = ? AND password = ?",
 		[{{sql_varchar, 20}, [Login]},
@@ -140,16 +155,30 @@ auth(DBHandler, Login, Password) ->
 create_new_table(DBHandler, User, Name, Description) ->
 	{updated, _} = odbc:sql_query(DBHandler, "INSERT INTO tables VALUES()"),
 	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT max(id) AS last_id FROM tables"),
-	{ok, TableId} = get_first_column(Rows, error),
+	{ok, Table} = get_first_column(Rows, error),
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes VALUES(?, UNIX_TIMESTAMP(), ?, ?, ?)",	
-								[{sql_integer, [TableId]},
+								[{sql_integer, [Table]},
 								 {sql_integer, [User]},
 								 {{sql_varchar, 100}, [Name]},
 								 {{sql_varchar, 65535}, [Description]}
 								]),
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers VALUES (?, ?, 1)",
 								[{sql_integer, [User]},
-								 {sql_integer, [TableId]}
+								 {sql_integer, [Table]}
 								]),
-	report(1, "New table added", TableId),
-	{ok, TableId}.
+	report(1, "New table added", Table),
+	{ok, Table}.
+
+create_new_task(_DBHandler, _User, _Table, _Name, _Description, _StartDate, _EndDate, _StartTime, _EndTime) ->
+	Task = 0,
+	{ok, Task}.
+
+%% Helpers
+get_first_column(List, Null) ->
+	case List of
+		[] -> 
+			Null;
+		[Row | _] ->
+			I = element(1, Row), 
+			{ok, I}
+	end.
