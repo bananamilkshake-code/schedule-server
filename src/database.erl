@@ -22,10 +22,12 @@
 -module(database).
 -behaviour(gen_server).
 
+-include("enums.hrl").
+
 %% Handling:
 -export([start_link/1]).
 -export([register/2, check_username/1, auth/2, 
-	create_new_table/3, create_new_task/8, create_commentary/5, 
+	create_new_table/4, create_new_task/9, create_commentary/5, 
 	change_table/5, change_task/10, change_permission/3]).
 
 %% Callbacks:
@@ -77,20 +79,23 @@ handle_call({register, Login, Password}, _From, DBHandler) ->
 handle_call({auth, Login, Password}, _From, DBHandler) ->
   Ret = auth(DBHandler, Login, Password),
   {reply, Ret, DBHandler};
-handle_call({create_new_table, User, Name, Description}, _From, DBHandler) ->
-  Ret = create_new_table(DBHandler, User, Name, Description),
+handle_call({create_new_table, User, Time, Name, Description}, _From, DBHandler) ->
+  Ret = create_new_table(DBHandler, User, Time, Name, Description),
   {reply, Ret, DBHandler};
-handle_call({create_new_task, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
-  Ret = create_new_task(DBHandler, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime),
+handle_call({create_new_task, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
+  Ret = create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {reply, Ret, DBHandler};
 handle_call({create_commentary, _User, _Table, _Task, _Time, _Commentary}, _From, DBHandler) ->
   {reply, ok, DBHandler};
-handle_call({change_table, _User, _Table, _Time, _Name, _Description}, _From, DBHandler) ->
-  {reply, ok, DBHandler};
-handle_call({change_task, _User, _Table, _Task, _Time, _Name, _Description, _StartDate, _EndDate, _StartTime, _EndTime}, _From, DBHandler) ->
-  {reply, ok, DBHandler};
-handle_call({change_permission, _User, _Table, _Permission}, _From, DBHandler) ->
-  {reply, ok, DBHandler};
+handle_call({change_table, User, Table, Time, Name, Description}, _From, DBHandler) ->
+  Ret = change_table(DBHandler, User, Table, Time, Name, Description),
+  {reply, Ret, DBHandler};
+handle_call({change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
+  Ret = change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+  {reply, Ret, DBHandler};
+handle_call({change_permission, Table, User, Permission}, _From, DBHandler) ->
+  Ret = change_permission(DBHandler, Table, User, Permission),
+  {reply, Ret, DBHandler};
 handle_call(Call, From, _DBHandler) ->
   {stop, "Wrong database call", {Call, From}}.
 
@@ -113,11 +118,11 @@ register(Login, Password) ->
 auth(Login, Password) ->
 	report(1, "Checking auth", {Login, Password}),
 	gen_server:call(?MODULE, {auth, Login, Password}).
-create_new_table(User, Name, Description) ->
-	report(1, "Creating new table", {User, Name, Description}),
-	gen_server:call(?MODULE, {create_new_table, User, Name, Description}).
-create_new_task(User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	report(1, "Creating new task", {User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}),
+create_new_table(User, Time, Name, Description) ->
+	report(1, "Creating new table", {User, Time, Name, Description}),
+	gen_server:call(?MODULE, {create_new_table, User, Time, Name, Description}).
+create_new_task(User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+	report(1, "Creating new task", {User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}),
 	gen_server:call(?MODULE, {create_new_task, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 create_commentary(User, Table, Task, Time, Commentary) ->
 	report(1, "Create new commentary", {User, Table, Task, Time, Commentary}),
@@ -152,26 +157,55 @@ auth(DBHandler, Login, Password) ->
 		]),
 	get_first_column(Rows, error).
 
-create_new_table(DBHandler, User, Name, Description) ->
+create_new_table(DBHandler, Time, User, Name, Description) ->
 	{updated, _} = odbc:sql_query(DBHandler, "INSERT INTO tables VALUES()"),
 	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT max(id) AS last_id FROM tables"),
 	{ok, Table} = get_first_column(Rows, error),
-	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes VALUES(?, UNIX_TIMESTAMP(), ?, ?, ?)",	
+	change_table(DBHandler, Table, Time, User, Name, Description),
+	change_permission(DBHandler, Table, User, ?PERMISSION_WRITE),
+	report(1, "New table added", Table),
+	{ok, Table}.
+
+create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO tasks(table_id) VALUES(?)", [{sql_integer, [Table]}]),
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT max(id) AS last_id FROM tasks WHERE table_id = ?", [{sql_integer, [Table]}]),
+	{ok, Task} = get_first_column(Rows, error),
+	change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	report(1, "New task added", Task),
+	{ok, Task}.
+
+change_table(DBHandler, Table, Time, User, Name, Description) ->
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes(table_id, time, user_id, name, description) VALUES(?, ?, ?, ?, ?)",	
 								[{sql_integer, [Table]},
+								 {sql_integer, [Time]},
 								 {sql_integer, [User]},
 								 {{sql_varchar, 100}, [Name]},
 								 {{sql_varchar, 65535}, [Description]}
 								]),
-	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers VALUES (?, ?, 1)",
-								[{sql_integer, [User]},
-								 {sql_integer, [Table]}
-								]),
-	report(1, "New table added", Table),
-	{ok, Table}.
+	ok.
 
-create_new_task(_DBHandler, _User, _Table, _Name, _Description, _StartDate, _EndDate, _StartTime, _EndTime) ->
-	Task = 0,
-	{ok, Task}.
+change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO task_changes(task_id, table_id, time, user_id, name, description, start_date, end_date, start_time, end_time) VALUES(?, ?, ?, ?, ?, ?, STR_TO_DATE(?, \"%d%m%Y\"), STR_TO_DATE(?, \"%d%m%Y\"), STR_TO_DATE(?, \"%h%i\"), STR_TO_DATE(?, \"%h%i\"))",	
+								[{sql_integer, [Table]},
+								 {sql_integer, [Task]},
+								 {sql_integer, [Time]},
+								 {sql_integer, [User]},
+								 {{sql_varchar, 100}, [Name]},
+								 {{sql_varchar, 65535}, [Description]},
+								 {sql_varchar, 8}, [StartDate],
+								 {sql_varchar, 8}, [EndDate],
+								 {sql_varchar, 4}, [StartTime],
+								 {sql_varchar, 4}, [EndTime]
+								]),
+	ok.
+
+change_permission(DBHandler, Table, User, Permission) ->
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers VALUES (?, ?, ?)",
+								[{sql_integer, [User]},
+								 {sql_integer, [Table]},
+								 {sql_integer, [Permission]}
+								]),
+	ok.
 
 %% Helpers
 get_first_column(List, Null) ->

@@ -73,11 +73,11 @@ handle_cast({login, Name, Password}, State) ->
 handle_cast({register, Name, Password}, State) ->
   {ok, NewState} = register(State, Name, Password),
   {noreply, NewState};
-handle_cast({new_table, Name, Description}, State) ->
-  ok = new_table(State#state.socket, State#state.user_id, Name, Description),
+handle_cast({new_table, Time, Name, Description}, State) ->
+  ok = new_table(State#state.socket, State#state.user_id, Time, Name, Description),
   {noreply, State};
-handle_cast({new_task, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
-  ok = new_task(State#state.socket, State#state.user_id, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime),
+handle_cast({new_task, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
+  ok = new_task(State#state.socket, State#state.user_id, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {noreply, State};
 handle_cast({new_commentary, TableId, TaskId, Time, Commentary}, State) ->
   ok = new_commentary(State#state.socket, State#state.user_id, TableId, TaskId, Time, Commentary),
@@ -153,11 +153,11 @@ handle_packet(Type, Packet) when Type =:= ?CLIENT_LOGIN ->
   {ok, Name, Password} = parse(login, Packet),
   do_login(Name, Password);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TABLE ->
-  {ok, Name, Description} = parse(new_table, Packet),
-  create_new_table(Name, Description);
+  {ok, Time, Name, Description} = parse(new_table, Packet),
+  create_new_table(Time, Name, Description);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TASK ->
-  {ok, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(new_task, Packet),
-  create_new_task(TableId, Name, Description, StartDate, EndDate, StartTime, EndTime);
+  {ok, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(new_task, Packet),
+  create_new_task(TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_TABLE_CHANGE ->
   {ok, TableId, Time, Name, Description} = parse(table_change, Packet),
   do_change_table(TableId, Time, Name, Description);
@@ -191,12 +191,12 @@ parse(register, Data) ->
   Password = binary_to_list(PasswordBin),
   {ok, Name, Password};
 parse(new_table, Data) ->
-  <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
+  <<Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Description = binary_to_list(DescBin),
-  {ok, Name, Description};
+  {ok, Time, Name, Description};
 parse(new_task, Data) ->
-  <<TableId:?ID_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, 
+  <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, 
     DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring, 
     StartDateBin:?DATE_LENGTH/bitstring, EndDateBin:?DATE_LENGTH/bitstring, 
     StartTimeBin:?TIME_LENGTH/bitstring, EndTimeBin:?TIME_LENGTH/bitstring>> = Data,
@@ -206,14 +206,14 @@ parse(new_task, Data) ->
   EndDate = binary_to_list(EndDateBin),
   StartTime = binary_to_list(StartTimeBin),
   EndTime = binary_to_list(EndTimeBin),
-  {ok, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime};
+  {ok, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime};
 parse(table_change, Data) ->
-  <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, ChangedData/binary>> = Data,
-  {ok, Name, Description} = parse(new_table, ChangedData),
+  <<TableId:?ID_LENGTH, ChangedData/binary>> = Data,
+  {ok, Time, Name, Description} = parse(new_table, ChangedData),
   {ok, TableId, Time, Name, Description};
 parse(task_change, Data) ->
-  <<TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, ChangedData/binary>> = Data,
-  {ok, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(new_task, ChangedData),
+  <<TaskId:?ID_LENGTH, ChangedData/binary>> = Data,
+  {ok, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(new_task, ChangedData),
   {ok, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime};
 parse(permission, Data) ->
   <<TableId:?ID_LENGTH, UserId:?ID_LENGTH, Permission:8>> = Data,
@@ -230,10 +230,10 @@ do_login(Name, Password) ->
   gen_server:cast(self(), {login, Name, Password}).
 do_register(Name, Password) ->
   gen_server:cast(self(), {register, Name, Password}).
-create_new_table(Name, Description) ->
-  gen_server:cast(self(), {new_table, Name, Description}).
-create_new_task(TableId, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-  gen_server:cast(self(), {new_task, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime}).
+create_new_table(Time, Name, Description) ->
+  gen_server:cast(self(), {new_table, Time, Name, Description}).
+create_new_task(TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+  gen_server:cast(self(), {new_task, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 create_new_commentary(TableId, TaskId, Time, Commentary) ->
   gen_server:cast(self(), {new_commentary, TableId, TaskId, Time, Commentary}).
 do_change_table(TableId, Time, Name, Description) ->
@@ -271,11 +271,11 @@ login(State, Name, Password) ->
       {ok, State#state{user_id=Id}}
   end.
 
-new_table(_Socket, UserId, Name, Description) ->
-  {ok, _TableId} = database:create_new_table(UserId, Name, Description),
+new_table(_Socket, Time, UserId, Name, Description) ->
+  {ok, _TableId} = database:create_new_table(UserId, Time, Name, Description),
   ok.
-new_task(_Socket, UserId, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-  {ok, _TaskId} = database:create_new_task(UserId, TableId, Name, Description, StartDate, EndDate, StartTime, EndTime),
+new_task(_Socket, UserId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+  {ok, _TaskId} = database:create_new_task(UserId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   ok.
 new_commentary(_Socket, UserId, TableId, TaskId, Time, Commentary) ->
   database:create_commentary(UserId, TableId, TaskId, Time, Commentary).
