@@ -107,7 +107,6 @@ code_change(_, DBHandler, _) ->
   report(1, "Code change in Schedule Server database"),
   {ok, DBHandler}.
 
-
 %% Publc
 check_username(Login) ->
 	report(1, "Checking username", Login),

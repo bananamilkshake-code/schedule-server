@@ -44,9 +44,9 @@
 -define(CHAR_SIZE, 8).
 -define(STRING_LENGTH, 16).
 -define(ID_LENGTH, 32).
--define(DATE_LENGTH, 8). %% ddMMyyyy
--define(TIME_LENGTH, 4). %% HHMM
--define(UNIXTIME_LENGTH, 32).
+-define(DATE_LENGTH, 64). %% ddMMyyyy
+-define(TIME_LENGTH, 32). %% HHMM
+-define(UNIXTIME_LENGTH, 64).
 
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
@@ -68,27 +68,35 @@ handle_call(Data, _From, State) ->
   {reply, ok, State}.
 
 handle_cast({login, Name, Password}, State) ->
+  report(1, "handle_cast LOGIN"),
   {ok, NewState} = login(State, Name, Password),
   {noreply, NewState};
 handle_cast({register, Name, Password}, State) ->
+  report(1, "handle_cast REGISTER"),
   {ok, NewState} = register(State, Name, Password),
   {noreply, NewState};
 handle_cast({new_table, Time, Name, Description}, State) ->
+  report(1, "handle_cast NEW_TABLE"),
   ok = new_table(State#state.socket, State#state.user_id, Time, Name, Description),
   {noreply, State};
 handle_cast({new_task, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
+  report(1, "handle_cast NEW_TASK"),
   ok = new_task(State#state.socket, State#state.user_id, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {noreply, State};
 handle_cast({new_commentary, TableId, TaskId, Time, Commentary}, State) ->
+  report(1, "handle_cast NEW_COMMENTARY"),
   ok = new_commentary(State#state.socket, State#state.user_id, TableId, TaskId, Time, Commentary),
   {noreply, State};
 handle_cast({table_change, TableId, Time, Name, Description}, State) ->
+  report(1, "handle_cast TABLE_CHANGE"),
   ok = table_change(State#state.socket, State#state.user_id, TableId, Time, Name, Description),
   {noreply, State};
 handle_cast({task_change, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
+  report(1, "handle_cast TASK_CHANGE"),
   ok = task_change(State#state.socket, State#state.user_id, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {noreply, State};
 handle_cast({permission_change, TableId, UserId, Permission}, State) ->
+  report(1, "handle_cast PERMISSION"),
   ok = permission_change(State#state.socket, TableId, UserId, Permission),
   {noreply, State};
 handle_cast(Data, State) ->
@@ -181,24 +189,29 @@ send(Type, Data, Socket) ->
   gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
 
 parse(login, Data) ->
+  report(1, "Parse LOGIN packet"),
   <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Password = binary_to_list(PasswordBin),
   {ok, Name, Password};
 parse(register, Data) ->
+  report(1, "Parse registered packet"),
   <<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Password = binary_to_list(PasswordBin),
   {ok, Name, Password};
 parse(new_table, Data) ->
+  report(1, "Parse NEW_TABLE packet"),
   <<Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Description = binary_to_list(DescBin),
   {ok, Time, Name, Description};
 parse(new_task, Data) ->
-  <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, 
-    DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring, 
-    StartDateBin:?DATE_LENGTH/bitstring, EndDateBin:?DATE_LENGTH/bitstring, 
+  report(1, "Parse NEW_TASK packet"),
+  <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
+    NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring,
+    DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring,
+    StartDateBin:?DATE_LENGTH/bitstring, EndDateBin:?DATE_LENGTH/bitstring,
     StartTimeBin:?TIME_LENGTH/bitstring, EndTimeBin:?TIME_LENGTH/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Description = binary_to_list(DescBin),
@@ -208,17 +221,21 @@ parse(new_task, Data) ->
   EndTime = binary_to_list(EndTimeBin),
   {ok, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime};
 parse(table_change, Data) ->
+  report(1, "Parse TABLE_CHANGE packet"),
   <<TableId:?ID_LENGTH, ChangedData/binary>> = Data,
   {ok, Time, Name, Description} = parse(new_table, ChangedData),
   {ok, TableId, Time, Name, Description};
 parse(task_change, Data) ->
+  report(1, "Parse TASK_CHANGE packet"),
   <<TaskId:?ID_LENGTH, ChangedData/binary>> = Data,
   {ok, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(new_task, ChangedData),
   {ok, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime};
 parse(permission, Data) ->
+  report(1, "Parse PERMISSION packet"),
   <<TableId:?ID_LENGTH, UserId:?ID_LENGTH, Permission:8>> = Data,
   {ok, TableId, UserId, Permission};
 parse(commentary, Data) ->
+  report(1, "Parse COMMENTARY packet"),
   <<TaskId:?ID_LENGTH, TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, CommentLength:?STRING_LENGTH, CommentBin:CommentLength/bitstring>> = Data,
   Commentary = binary_to_list(CommentBin),
   {ok, TableId, TaskId, Time, Commentary};
