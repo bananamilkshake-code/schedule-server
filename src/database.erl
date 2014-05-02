@@ -122,7 +122,7 @@ create_new_table(User, Time, Name, Description) ->
 	gen_server:call(?MODULE, {create_new_table, User, Time, Name, Description}).
 create_new_task(User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
 	report(1, "Creating new task", {User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}),
-	gen_server:call(?MODULE, {create_new_task, User, Table, Name, Description, StartDate, EndDate, StartTime, EndTime}).
+	gen_server:call(?MODULE, {create_new_task, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 create_commentary(User, Table, Task, Time, Commentary) ->
 	report(1, "Create new commentary", {User, Table, Task, Time, Commentary}),
 	gen_server:call(?MODULE, {create_commentary, User, Table, Task, Time, Commentary}).
@@ -191,10 +191,10 @@ change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, En
 								 {sql_integer, [User]},
 								 {{sql_varchar, 100}, [Name]},
 								 {{sql_varchar, 65535}, [Description]},
-								 {sql_varchar, 8}, [StartDate],
-								 {sql_varchar, 8}, [EndDate],
-								 {sql_varchar, 4}, [StartTime],
-								 {sql_varchar, 4}, [EndTime]
+								 {{sql_varchar, 8}, [StartDate]},
+								 {{sql_varchar, 8}, [EndDate]},
+								 {{sql_varchar, 4}, [StartTime]},
+								 {{sql_varchar, 4}, [EndTime]}
 								]),
 	ok.
 
