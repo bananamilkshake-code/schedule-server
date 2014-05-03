@@ -21,18 +21,22 @@
 
 %% @author Elizaveta Lukicheva <liza.lukicheva@gmail.com>
 %% @copyright 2013-2014 Elizaveta Lukicheva
-%% @doc This is the tier 1 Schedule Server packet processor. It receives a raw
-%% message from the supervisor (and supervisor receives
-%% it from the acceptor) and handles it.
+%% @doc List of packet types and packet's data that can
+%% be proceed between server and client.
 
 %%% Server's packets
--define(SERVER_REGISTER, 0).
--define(SERVER_LOGIN, 1).
+-define(SERVER_REGISTER,	0).
+-define(SERVER_LOGIN,		1).
 
 %%% Client's packets
--define(CLIENT_REGISTER, 0).
--define(CLIENT_LOGIN, 1).
--define(CLIENT_NEW_TABLE, 2).
+-define(CLIENT_REGISTER,	0).
+-define(CLIENT_LOGIN,		1).
+-define(CLIENT_NEW_TABLE,	2).
+-define(CLIENT_NEW_TASK,	3).
+-define(CLIENT_TABLE_CHANGE,4).
+-define(CLIENT_TASK_CHANGE,	5).
+-define(CLIENT_PERMISSION,	6).
+-define(CLIENT_COMMENTARY,	7).
 
 %%% Register status
 -define(REGISTER_SUCCESS, 0).
@@ -41,3 +45,8 @@
 %%% Login status
 -define(LOGIN_SUCCESS, 0).
 -define(LOGIN_FAILURE, 1).
+
+%%% Permission types
+-define(PERMISSION_NONE, 0).
+-define(PERMISSION_READ, 1).
+-define(PERMISSION_WRITE, 2).
