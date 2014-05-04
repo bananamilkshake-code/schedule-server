@@ -85,20 +85,20 @@ handle_call({create_new_table, User, Time, Name, Description}, _From, DBHandler)
 handle_call({create_new_task, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
   Ret = create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {reply, Ret, DBHandler};
-handle_call({create_commentary, _User, _Table, _Task, _Time, _Commentary}, _From, DBHandler) ->
-  {reply, ok, DBHandler};
-handle_call({change_table, User, Table, Time, Name, Description}, _From, DBHandler) ->
-  Ret = change_table(DBHandler, User, Table, Time, Name, Description),
-  {reply, Ret, DBHandler};
-handle_call({change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
-  Ret = change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
-  {reply, Ret, DBHandler};
-handle_call({change_permission, Table, User, Permission}, _From, DBHandler) ->
-  Ret = change_permission(DBHandler, Table, User, Permission),
-  {reply, Ret, DBHandler};
 handle_call(Call, From, _DBHandler) ->
   {stop, "Wrong database call", {Call, From}}.
 
+handle_cast({create_commentary, _User, _Table, _Task, _Time, _Commentary}, DBHandler) ->
+  {noreply, DBHandler};
+handle_cast({change_table, User, Table, Time, Name, Description}, DBHandler) ->
+  change_table(DBHandler, User, Table, Time, Name, Description),
+  {noreply, DBHandler};
+handle_cast({change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, DBHandler) ->
+  change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+  {noreply, DBHandler};
+handle_cast({change_permission, Table, User, Permission}, DBHandler) ->
+  change_permission(DBHandler, Table, User, Permission),
+  {noreply, DBHandler};
 handle_cast(Data, DBHandler) ->
   report(0, "Wrong cast in Schedule Server database", Data),
   {noreply, DBHandler}.
@@ -125,16 +125,16 @@ create_new_task(User, Table, Time, Name, Description, StartDate, EndDate, StartT
 	gen_server:call(?MODULE, {create_new_task, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 create_commentary(User, Table, Task, Time, Commentary) ->
 	report(1, "Create new commentary", {User, Table, Task, Time, Commentary}),
-	gen_server:call(?MODULE, {create_commentary, User, Table, Task, Time, Commentary}).
+	gen_server:cast(?MODULE, {create_commentary, User, Table, Task, Time, Commentary}).
 change_table(User, Table, Time, Name, Description) ->
 	report(1, "Changing table", {User, Table, Time, Name, Description}),
-	gen_server:call(?MODULE, {change_table, User, Table, Time, Name, Description}).
+	gen_server:cast(?MODULE, {change_table, User, Table, Time, Name, Description}).
 change_task(User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
 	report(1, "Changing task", {User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}), 
-	gen_server:call(?MODULE, {change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
+	gen_server:cast(?MODULE, {change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 change_permission(User, Table, Permission) ->
 	report(1, "Changing permission", {User, Table, Permission}),
-	gen_server:call(?MODULE, {change_permission, User, Table, Permission}).
+	gen_server:cast(?MODULE, {change_permission, User, Table, Permission}).
 
 %% Private
 check_username(DBHandler, Login) ->
