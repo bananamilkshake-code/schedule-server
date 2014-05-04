@@ -69,12 +69,26 @@ handle_call(Data, _From, State) ->
 
 handle_cast({login, Name, Password}, State) ->
   report(1, "handle_cast LOGIN"),
-  {ok, NewState} = login(State, Name, Password),
-  {noreply, NewState};
+  case login(State#state.socket, Name, Password) of
+    {error} ->
+      report(1, "Wrong auth data", {Name, Password}),
+      {noreply, State};
+    {ok, Id} ->
+      report(1, "User successfully logined in", {Id, Name, Password}),
+      NewState = State#state{user_id=Id},
+      {noreply, NewState}
+  end;
 handle_cast({register, Name, Password}, State) ->
   report(1, "handle_cast REGISTER"),
-  {ok, NewState} = register(State, Name, Password),
-  {noreply, NewState};
+  case register(State#state.socket, Name, Password) of
+    {error} ->
+      report(1, "Duplicate user name", {Name, Password}),
+      {noreply, State};
+    {ok, Id} ->
+      report(1, "New user successfully registered", {Id, Name, Password}),
+      NewState = State#state{user_id=Id},
+      {noreply, NewState}
+  end;
 handle_cast({new_table, Time, Name, Description}, State) ->
   report(1, "handle_cast NEW_TABLE"),
   ok = new_table(State#state.socket, State#state.user_id, Time, Name, Description),
@@ -260,32 +274,32 @@ do_change_task(TableId, TaskId, Time, Name, Description, StartDate, EndDate, Sta
 do_change_permission(TableId, UserId, Permission) ->
   gen_server:cast(self(), {permission_change, TableId, UserId, Permission}).
 
-register(State, Name, Password) ->
+register(Socket, Name, Password) ->
   case database:check_username(Name) of
     [] ->
       AnswerSuccess = <<?REGISTER_SUCCESS:8>>,
       database:register(Name, Password),
       report(1, "New user registered", Name),
-      send(?SERVER_REGISTER, AnswerSuccess, State#state.socket),
-      login(Name, Password, State);
+      send(?SERVER_REGISTER, AnswerSuccess, Socket),
+      login(Socket, Name, Password);
     _ ->
       AnswerFailure = <<?REGISTER_FAILURE:8>>,
-      send(?SERVER_REGISTER, AnswerFailure, State#state.socket),
-      {ok, State}
+      send(?SERVER_REGISTER, AnswerFailure, Socket),
+      {error}
   end.
 
-login(State, Name, Password) ->
+login(Socket, Name, Password) ->
   case database:auth(Name, Password) of
     error ->
       Answer = <<?LOGIN_FAILURE:8>>,
-      send(?SERVER_LOGIN, Answer, State#state.socket),
-      {ok, State};
+      send(?SERVER_LOGIN, Answer, Socket),
+      {error};
     {ok, Id} ->
-      Answer = <<?LOGIN_SUCCESS:8>>,
+      Answer = <<?LOGIN_SUCCESS:8, Id:?ID_LENGTH>>,
       report(1, "User logined in", Name),
-      send(?SERVER_LOGIN, Answer, State#state.socket),
+      send(?SERVER_LOGIN, Answer, Socket),
       clients:add(Id, self()),
-      {ok, State#state{user_id=Id}}
+      {ok, Id}
   end.
 
 new_table(_Socket, Time, UserId, Name, Description) ->
