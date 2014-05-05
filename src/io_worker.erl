@@ -91,11 +91,11 @@ handle_cast({register, Name, Password}, State) ->
   end;
 handle_cast({new_table, TableId, Time, Name, Description}, State) ->
   report(1, "handle_cast NEW_TABLE"),
-  ok = new_table(State#state.socket, State#state.user_id, TableId, Time, Name, Description),
+  new_table(State#state.socket, State#state.user_id, TableId, Time, Name, Description),
   {noreply, State};
 handle_cast({new_task, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
   report(1, "handle_cast NEW_TASK"),
-  ok = new_task(State#state.socket, State#state.user_id, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+  new_task(State#state.socket, State#state.user_id, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {noreply, State};
 handle_cast({new_commentary, TableId, TaskId, Time, Commentary}, State) ->
   report(1, "handle_cast NEW_COMMENTARY"),
@@ -219,7 +219,7 @@ parse(table_data, Data) ->
   <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
   Name = binary_to_list(NameBin),
   Description = binary_to_list(DescBin),
-  {ok, Table, Time, Name, Description};
+  {ok, TableId, Time, Name, Description};
 parse(task_data, Data) ->
   report(1, "Parse NEW_TASK packet"),
   <<TaskId:?ID_LENGTH, TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
@@ -292,10 +292,10 @@ login(Socket, Name, Password) ->
       {ok, Id}
   end.
 
-new_table(_Socket, TableClientId, Time, UserId, Name, Description) ->
+new_table(Socket, TableClientId, Time, UserId, Name, Description) ->
   {ok, TableId} = database:create_new_table(UserId, Time, Name, Description),
   send(?SERVER_GLOBAL_TABLE, <<TableClientId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket).
-new_task(_Socket, UserId, TaskClientId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+new_task(Socket, UserId, TaskClientId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
   {ok, TaskId} = database:create_new_task(UserId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
   send(?SERVER_GLOBAL_TASK, <<TaskClientId:?ID_LENGTH, TaskId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket).
 new_commentary(_Socket, UserId, TableId, TaskId, Time, Commentary) ->
