@@ -24,12 +24,21 @@
 %% @doc List of packet types and packet's data that can
 %% be proceed between server and client.
 
+-define(PACKET_SIZE, 16).
+-define(TYPE_SIZE, 8).
+-define(CHAR_SIZE, 8).
+-define(STRING_LENGTH, 16).
+-define(ID_LENGTH, 32).
+-define(DATE_LENGTH, 64). %% ddMMyyyy
+-define(TIME_LENGTH, 32). %% HHMM
+-define(UNIXTIME_LENGTH, 64).
+
 %%% Server's packets
 -define(SERVER_REGISTER,		0).
 -define(SERVER_LOGIN,			1).
 -define(SERVER_GLOBAL_TABLE,	2).
 -define(SERVER_GLOBAL_TASK, 	3).
--define(SERVER_CHANGE_TABLES,	4).
+-define(SERVER_CHANGE_TABLE,	4).
 -define(SERVER_CHANGE_TASK,		5).
 -define(SERVER_PERMISSION, 		6).
 -define(SERVER_COMMENTARY,		7).

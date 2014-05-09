@@ -21,8 +21,9 @@
 
 -module(clients).
 -behaviour(gen_server).
+-include("enums.hrl").
 
--export([add/2, remove/1]).
+-export([add/2, remove/1, update/2]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -77,6 +78,18 @@ handle_cast({remove, Id}, State) ->
 	ets:delete(State#state.clients_storage, Id),
 	report(1, "Client removed", Id),
 	{noreply, State};
+handle_cast({table, {TableId, Time, UserId, Name, Description}}, State) ->
+	table(State#state.clients_storage, TableId, Time, UserId, Name, Description),
+	{noreply, State};
+handle_cast({task, {TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime}}, State) ->
+	task(State#state.clients_storage, TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	{noreply, State};
+handle_cast({comment, {TableId, TaskId, Time, UserId, Commentary}}, State) ->
+	comment(State#state.clients_storage, TableId, TaskId, Time, UserId, Commentary),
+	{noreply, State};
+handle_cast({permission, {TableId, UserId, ReaderId, Permission}}, State) ->
+	permission(State#state.clients_storage, TableId, UserId, ReaderId, Permission),
+	{noreply, State};
 handle_cast(_, State) ->
 	report(1, "Unexpected clients cast"),
 	{noreply, State}.
@@ -85,10 +98,55 @@ code_change(_OldVsn, State, _Extra) ->
 	report(1, "Unexpected clients code_change"),
 	{ok, State}.
 
+%% Private methods
+online_users(TableId, UserId, Clients) ->
+	Users = database:get_readers_for(TableId, UserId),
+	F = fun(X, OnlineClients) ->
+		[Client] = ets:lookup(Clients, X),
+		lists:append(OnlineClients, Client#client.io_handler)
+		end,
+	lists:foldl(F, [], Users).
+
+send(Clients, Type, Packet) ->
+	lists:foreach(fun(IoClient) -> io_worker:cast(IoClient, {send, Type, Packet}) end, Clients).
+
+table(Clients, TableId, Time, UserId, Name, Description) ->
+	Sockets = online_users(TableId, UserId, Clients),
+	NameLength = byte_size(Name),
+	DescriptionLength = byte_size(Description),
+	send(Sockets, ?SERVER_CHANGE_TABLE, <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, UserId:?ID_LENGTH, 
+		NameLength:?STRING_LENGTH, Name/bitstring, DescriptionLength:?STRING_LENGTH, Description/bitstring>>).
+
+task(Clients, TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
+	Sockets = online_users(TableId, UserId, Clients),
+	NameLength = byte_size(Name),
+	DescriptionLength = byte_size(Description),
+	send(Sockets, ?SERVER_CHANGE_TASK, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, UserId:?ID_LENGTH, 
+		NameLength:?STRING_LENGTH, Name/bitstring, DescriptionLength:?STRING_LENGTH, Description/bitstring,
+		StartDate/bitstring, EndDate/bitstring, StartTime/bitstring, EndTime/bitstring>>).
+
+comment(Clients, TableId, TaskId, Time, UserId, Commentary) ->
+	Sockets = online_users(TableId, UserId, Clients),
+	CommentLength = byte_size(Commentary),
+	send(Sockets, ?SERVER_COMMENTARY, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
+		UserId:?ID_LENGTH, CommentLength:?STRING_LENGTH, Commentary/bitstring>>).
+
+permission(Clients, TableId, UserId, ReaderId, Permission) ->
+	Sockets = online_users(TableId, UserId, Clients),
+	send(Sockets, ?SERVER_PERMISSION, <<TableId:?ID_LENGTH, ReaderId:?ID_LENGTH, Permission:8>>).
+
 %% Public methods
 
 add(Id, IOHandler) ->
 	gen_server:cast(?MODULE, {add, Id, IOHandler}).
-
 remove(Id) ->
 	gen_server:cast(?MODULE, {remove, Id}).
+
+update(table, Data) ->
+	gen_server:cast(?MODULE, {table, Data});
+update(task, Data) ->
+	gen_server:cast(?MODULE, {task, Data});
+update(comment, Data) ->
+	gen_server:cast(?MODULE, {comment, Data});
+update(permission, Data) ->
+	gen_server:cast(?MODULE, {permission, Data}).
