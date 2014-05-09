@@ -101,35 +101,47 @@ code_change(_OldVsn, State, _Extra) ->
 %% Private methods
 online_users(TableId, UserId, Clients) ->
 	Users = database:get_readers_for(TableId, UserId),
-	F = fun(X, OnlineClients) ->
-		[Client] = ets:lookup(Clients, X),
-		lists:append(OnlineClients, Client#client.io_handler)
-		end,
-	lists:foldl(F, [], Users).
+	report(1, "Users", Users),
+	lists:foldl(fun(User, OnlineClients) ->
+		case ets:lookup(Clients, User) of
+			[Client] ->	lists:append(OnlineClients, Client#client.io_handler);
+			[] -> OnlineClients
+		end end, [], Users).
 
 send(Clients, Type, Packet) ->
 	lists:foreach(fun(IoClient) -> io_worker:cast(IoClient, {send, Type, Packet}) end, Clients).
 
 table(Clients, TableId, Time, UserId, Name, Description) ->
+	report(1, "table name", Name),
+	report(1, "name len", string:len(Name)),
 	Sockets = online_users(TableId, UserId, Clients),
-	NameLength = byte_size(Name),
-	DescriptionLength = byte_size(Description),
+	NameBin = list_to_binary(Name),
+	NameLength = string:len(Name),
+	DescBin = list_to_binary(Description),
+	DescriptionLength = string:len(Description),
 	send(Sockets, ?SERVER_CHANGE_TABLE, <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, UserId:?ID_LENGTH, 
-		NameLength:?STRING_LENGTH, Name/bitstring, DescriptionLength:?STRING_LENGTH, Description/bitstring>>).
+		NameLength:?STRING_LENGTH, NameBin/binary, DescriptionLength:?STRING_LENGTH, DescBin/binary>>).
 
 task(Clients, TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
 	Sockets = online_users(TableId, UserId, Clients),
-	NameLength = byte_size(Name),
-	DescriptionLength = byte_size(Description),
+	NameBin = list_to_binary(Name),
+	NameLength = string:len(Name),
+	DescriptionLength = string:len(Description),
+	DescBin = list_to_binary(Description),
+	StartDateBin = list_to_binary(StartDate),
+	EndDateBin = list_to_binary(EndDate),
+	StartTimeBin = list_to_binary(StartTime),
+	EndTimeBin = list_to_binary(EndTime),
 	send(Sockets, ?SERVER_CHANGE_TASK, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, UserId:?ID_LENGTH, 
-		NameLength:?STRING_LENGTH, Name/bitstring, DescriptionLength:?STRING_LENGTH, Description/bitstring,
-		StartDate/bitstring, EndDate/bitstring, StartTime/bitstring, EndTime/bitstring>>).
+		NameLength:?STRING_LENGTH, NameBin/binary, DescriptionLength:?STRING_LENGTH, DescBin/binary,
+		StartDateBin/binary, EndDateBin/binary, StartTimeBin/binary, EndTimeBin/binary>>).
 
 comment(Clients, TableId, TaskId, Time, UserId, Commentary) ->
 	Sockets = online_users(TableId, UserId, Clients),
-	CommentLength = byte_size(Commentary),
+	CommentLength = string:len(Commentary),
+	CommentaryBin = list_to_binary(Commentary),
 	send(Sockets, ?SERVER_COMMENTARY, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
-		UserId:?ID_LENGTH, CommentLength:?STRING_LENGTH, Commentary/bitstring>>).
+		UserId:?ID_LENGTH, CommentLength:?STRING_LENGTH, CommentaryBin/binary>>).
 
 permission(Clients, TableId, UserId, ReaderId, Permission) ->
 	Sockets = online_users(TableId, UserId, Clients),

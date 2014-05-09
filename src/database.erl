@@ -208,12 +208,10 @@ change_permission(DBHandler, User, Table, Permission) ->
 				 {sql_integer, [Permission]}
 				]).
 
-get_readers(DBHandler, Table, User) ->
-	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT user_id FROM readers WHERE table_id = ? AND user_id != ?", 
-				[{sql_integer, [Table]},
-				 {sql_integer, [User]}
-				]),
-	lists:foldl(fun({Id}, List) -> lists:append(List, Id) end, [], Rows).
+get_readers(DBHandler, Table, _User) ->
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT reader_id FROM readers WHERE table_id = ?", 
+				[{sql_integer, [Table]}]),
+	Rows.
 
 %% Helpers
 get_first_column(List, Null) ->
