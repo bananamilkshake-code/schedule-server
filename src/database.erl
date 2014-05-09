@@ -97,10 +97,10 @@ handle_cast({change_table, User, Table, Time, Name, Description}, DBHandler) ->
   change_table(DBHandler, User, Table, Time, Name, Description),
   {noreply, DBHandler};
 handle_cast({change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, DBHandler) ->
-  change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+  change_task(DBHandler, Table, Task, Time, User, Name, Description, StartDate, EndDate, StartTime, EndTime),
   {noreply, DBHandler};
-handle_cast({change_permission, Table, User, Permission}, DBHandler) ->
-  change_permission(DBHandler, Table, User, Permission),
+handle_cast({change_permission, User, Table, Permission}, DBHandler) ->
+  change_permission(DBHandler, User, Table, Permission),
   {noreply, DBHandler};
 handle_cast(Data, DBHandler) ->
   report(0, "Wrong cast in Schedule Server database", Data),
@@ -135,9 +135,9 @@ change_table(User, Table, Time, Name, Description) ->
 change_task(User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
 	report(1, "Changing task", {User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}), 
 	gen_server:cast(?MODULE, {change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
-change_permission(User, Table, Permission) ->
-	report(1, "Changing permission", {User, Table, Permission}),
-	gen_server:cast(?MODULE, {change_permission, User, Table, Permission}).
+change_permission(Table, User, Permission) ->
+	report(1, "Changing permission", {Table, User, Permission}),
+	gen_server:cast(?MODULE, {change_permission, Table, User, Permission}).
 get_readers_for(TableId, UserId) ->
 	gen_server:call(?MODULE, {get_readers, TableId, UserId}).
 
@@ -161,7 +161,7 @@ auth(DBHandler, Login, Password) ->
 		]),
 	get_first_column(Rows, error).
 
-create_new_table(DBHandler, Time, User, Name, Description) ->
+create_new_table(DBHandler, User, Time, Name, Description) ->
 	{updated, _} = odbc:sql_query(DBHandler, "INSERT INTO tables VALUES()"),
 	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT max(id) AS last_id FROM tables"),
 	{ok, Table} = get_first_column(Rows, error),
@@ -178,7 +178,7 @@ create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndD
 	report(1, "New task added", Task),
 	{ok, Task}.
 
-change_table(DBHandler, Table, Time, User, Name, Description) ->
+change_table(DBHandler, User, Table, Time, Name, Description) ->
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes(table_id, time, user_id, name, description) VALUES(?, ?, ?, ?, ?)",	
 				[{sql_integer, [Table]},
 				 {sql_integer, [Time]},
@@ -201,8 +201,8 @@ change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, En
 				 {{sql_varchar, 4}, [EndTime]}
 				]).
 
-change_permission(DBHandler, Table, User, Permission) ->
-	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers VALUES (?, ?, ?)",
+change_permission(DBHandler, User, Table, Permission) ->
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers(reader_id, table_id, permission) VALUES (?, ?, ?)",
 				[{sql_integer, [User]},
 				 {sql_integer, [Table]},
 				 {sql_integer, [Permission]}
