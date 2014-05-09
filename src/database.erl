@@ -165,8 +165,8 @@ create_new_table(DBHandler, User, Time, Name, Description) ->
 	{updated, _} = odbc:sql_query(DBHandler, "INSERT INTO tables VALUES()"),
 	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT max(id) AS last_id FROM tables"),
 	{ok, Table} = get_first_column(Rows, error),
-	change_table(Table, Time, User, Name, Description),
-	change_permission(Table, User, ?PERMISSION_WRITE),
+	change_table(User, Table, Time, Name, Description),
+	change_permission(User, Table, ?PERMISSION_WRITE),
 	report(1, "New table added", Table),
 	{ok, Table}.
 

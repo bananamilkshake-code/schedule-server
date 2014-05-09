@@ -287,7 +287,7 @@ login(Socket, Name, Password) ->
       {ok, Id}
   end.
 
-new_table(Socket, TableClientId, Time, UserId, Name, Description) ->
+new_table(Socket, UserId, TableClientId, Time, Name, Description) ->
   {ok, TableId} = database:create_new_table(UserId, Time, Name, Description),
   send(?SERVER_GLOBAL_TABLE, <<TableClientId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket),
   clients:update(table, {TableId, Time, UserId, Name, Description}).
