@@ -28,7 +28,8 @@
 -export([start_link/1]).
 -export([register/2, check_username/1, auth/2, 
 	create_new_table/4, create_new_task/9, create_commentary/5, 
-	change_table/5, change_task/10, change_permission/3, get_readers_for/2, check_permission/3]).
+	change_table/5, change_task/10, change_permission/3, 
+	get_readers_for/2, check_permission/3, logout_update/1]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -106,6 +107,9 @@ handle_cast({change_task, User, Table, Task, Time, Name, Description, StartDate,
 handle_cast({change_permission, User, Table, Permission}, DBHandler) ->
   change_permission(DBHandler, User, Table, Permission),
   {noreply, DBHandler};
+ handle_cast({logout_update, User}, DBHandler) ->
+  logout_update(DBHandler, User),
+  {noreply, DBHandler}; 
 handle_cast(Data, DBHandler) ->
   report(0, "Wrong cast in Schedule Server database", Data),
   {noreply, DBHandler}.
@@ -142,8 +146,10 @@ change_task(User, Table, Task, Time, Name, Description, StartDate, EndDate, Star
 change_permission(Table, User, Permission) ->
 	report(1, "Changing permission", {Table, User, Permission}),
 	gen_server:cast(?MODULE, {change_permission, Table, User, Permission}).
-get_readers_for(TableId, UserId) ->
-	gen_server:call(?MODULE, {get_readers, TableId, UserId}).
+logout_update(User) ->
+	gen_server:cast(?MODULE, {logout_update, User}).
+get_readers_for(Table, User) ->
+	gen_server:call(?MODULE, {get_readers, Table, User}).
 check_permission(UserId, TableId, Permission) ->
 	gen_server:call(?MODULE, {check_permission, UserId, TableId, Permission}).
 
@@ -222,6 +228,10 @@ change_permission(DBHandler, User, Table, Permission) ->
 				 {sql_integer, [Table]},
 				 {sql_integer, [Permission]}
 				]).
+
+logout_update(DBHandler, User) ->
+	{updated, _} = odbc:param_query(DBHandler, "UPDATE users SET logout_time = UNIX_TIMESTAMP() WHERE id = ?",
+				[{sql_integer, [User]}]).
 
 get_readers(DBHandler, Table, _User) ->
 	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT reader_id FROM readers WHERE table_id = ?", 

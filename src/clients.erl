@@ -76,6 +76,7 @@ handle_cast({add, Id, IOHandler}, State) ->
 	{noreply, State};
 handle_cast({remove, Id}, State) -> 
 	ets:delete(State#state.clients_storage, Id),
+	database:logout_update(Id),
 	report(1, "Client removed", Id),
 	{noreply, State};
 handle_cast({table, {TableId, Time, UserId, Name, Description}}, State) ->
