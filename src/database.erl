@@ -28,7 +28,7 @@
 -export([start_link/1]).
 -export([register/2, check_username/1, auth/2, 
 	create_new_table/4, create_new_task/9, create_commentary/5, 
-	change_table/5, change_task/10, change_permission/3, get_readers_for/2]).
+	change_table/5, change_task/10, change_permission/3, get_readers_for/2, check_permission/3]).
 
 %% Callbacks:
 -export([init/1, terminate/2]).
@@ -88,10 +88,14 @@ handle_call({create_new_task, User, Table, Time, Name, Description, StartDate, E
 handle_call({get_readers, TableId, UserId}, _From, DBHandler) ->
   Ret = get_readers(DBHandler, TableId, UserId),
   {reply, Ret, DBHandler};
+handle_call({check_permission, UserId, TableId, Permission}, _From, DBHandler) ->
+  Ret = check_permission(DBHandler, UserId, TableId, Permission),
+  {reply, Ret, DBHandler};
 handle_call(Call, From, _DBHandler) ->
   {stop, "Wrong database call", {Call, From}}.
 
-handle_cast({create_commentary, _User, _Table, _Task, _Time, _Commentary}, DBHandler) ->
+handle_cast({create_commentary, User, Table, Task, Time, Commentary}, DBHandler) ->
+  create_commentary(DBHandler, User, Table, Task, Time, Commentary),
   {noreply, DBHandler};
 handle_cast({change_table, User, Table, Time, Name, Description}, DBHandler) ->
   change_table(DBHandler, User, Table, Time, Name, Description),
@@ -140,6 +144,8 @@ change_permission(Table, User, Permission) ->
 	gen_server:cast(?MODULE, {change_permission, Table, User, Permission}).
 get_readers_for(TableId, UserId) ->
 	gen_server:call(?MODULE, {get_readers, TableId, UserId}).
+check_permission(UserId, TableId, Permission) ->
+	gen_server:call(?MODULE, {check_permission, UserId, TableId, Permission}).
 
 %% Private
 check_username(DBHandler, Login) ->
@@ -178,6 +184,15 @@ create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndD
 	report(1, "New task added", Task),
 	{ok, Task}.
 
+create_commentary(DBHandler, User, Table, Task, Time, Commentary) ->
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO comments(commentator_id, table_id, task_id, commentary, time) VALUES(?, ?, ?, ?, ?)", 
+				[{sql_integer, [User]},
+				 {sql_integer, [Table]},
+				 {sql_integer, [Task]},
+				 {{sql_varchar, 100}, [Commentary]},
+				 {sql_integer, Time}
+				]).
+
 change_table(DBHandler, User, Table, Time, Name, Description) ->
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes(table_id, time, user_id, name, description) VALUES(?, ?, ?, ?, ?)",	
 				[{sql_integer, [Table]},
@@ -212,6 +227,14 @@ get_readers(DBHandler, Table, _User) ->
 	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT reader_id FROM readers WHERE table_id = ?", 
 				[{sql_integer, [Table]}]),
 	Rows.
+
+check_permission(DBHandler, User, Table, Permission) ->
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT reader_id FROM readers WHERE table_id = ? AND reader_id = ? AND permission >= ?",
+				[{sql_integer, [Table]},
+				 {sql_integer, [User]},
+				 {sql_integer, [Permission]}
+				]),
+	length(Rows) > 0.
 
 %% Helpers
 get_first_column(List, Null) ->

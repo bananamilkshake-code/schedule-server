@@ -296,17 +296,37 @@ new_task(Socket, UserId, TaskClientId, TableId, Time, Name, Description, StartDa
   send(?SERVER_GLOBAL_TASK, <<TaskClientId:?ID_LENGTH, TaskId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket),
   clients:update(task, {TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 new_commentary(UserId, TableId, TaskId, Time, Commentary) ->
-  database:create_commentary(UserId, TableId, TaskId, Time, Commentary),
-  clients:update(comment, {TableId, TaskId, Time, UserId, Commentary}).
+  case database:check_permission(UserId, TableId, ?PERMISSION_READ) of
+    true ->
+      database:create_commentary(UserId, TableId, TaskId, Time, Commentary),
+      clients:update(comment, {TableId, TaskId, Time, UserId, Commentary});
+    false ->
+      report(1, "User do not have permission to create commentary", {UserId, TableId})
+  end.
 table_change(UserId, TableId, Time, Name, Description) ->
-  database:change_table(UserId, TableId, Time, Name, Description),
-  clients:update(table, {TableId, Time, UserId, Name, Description}).
+  case database:check_permission(UserId, TableId, ?PERMISSION_WRITE) of
+    true ->
+      database:change_table(UserId, TableId, Time, Name, Description),
+      clients:update(table, {TableId, Time, UserId, Name, Description});
+    false ->
+      report(1, "User do not have permission to change table", {UserId, TableId})
+  end.
 task_change(UserId, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-  database:change_task(UserId, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
-  clients:update(task, {TableId, TaskId, Time, UserId, Description, StartDate, EndDate, StartTime, EndTime}).
+  case database:check_permission(UserId, TableId, ?PERMISSION_WRITE) of
+    true ->
+      database:change_task(UserId, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+      clients:update(task, {TableId, TaskId, Time, UserId, Description, StartDate, EndDate, StartTime, EndTime});
+    false ->
+      report(1, "User do not have permission to change task", {UserId, TableId})
+  end.
 permission_change(UserId, TableId, ReaderId, Permission) ->
-  database:change_permission(UserId, TableId, ReaderId, Permission),
-  clients:update(permission, {TableId, UserId, ReaderId, Permission}).
+  case database:check_permission(UserId, TableId, ?PERMISSION_WRITE) of
+    true ->
+      database:change_permission(UserId, TableId, ReaderId, Permission),
+      clients:update(permission, {TableId, UserId, ReaderId, Permission});
+    false ->
+      report(1, "User do not have permission to change permissions", {UserId, TableId})
+  end.
 
 logout(UserId) ->
   if 
