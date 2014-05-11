@@ -120,7 +120,6 @@ code_change(_, DBHandler, _) ->
 
 %% Publc
 check_username(Login) ->
-	report(1, "Checking username", Login),
 	gen_server:call(?MODULE, {check_username, Login}).
 register(Login, Password) ->
 	report(1, "Registering", {Login, Password}),

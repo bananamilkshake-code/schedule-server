@@ -260,20 +260,20 @@ do_change_permission(TableId, UserId, Permission) ->
   gen_server:cast(self(), {permission_change, TableId, UserId, Permission}).
 
 register(Socket, Name, Password) ->
+  report(1, "Registering", Name),
   case database:check_username(Name) of
-    [] ->
-      AnswerSuccess = <<?REGISTER_SUCCESS:8>>,
+    error ->
       database:register(Name, Password),
       report(1, "New user registered", Name),
-      send(?SERVER_REGISTER, AnswerSuccess, Socket),
+      send(?SERVER_REGISTER, <<?REGISTER_SUCCESS:8>>, Socket),
       login(Socket, Name, Password);
     _ ->
-      AnswerFailure = <<?REGISTER_FAILURE:8>>,
-      send(?SERVER_REGISTER, AnswerFailure, Socket),
+      send(?SERVER_REGISTER, <<?REGISTER_FAILURE:8>>, Socket),
       {error}
   end.
 
 login(Socket, Name, Password) ->
+  report(1, "Logining in", Name),
   case database:auth(Name, Password) of
     error ->
       Answer = <<?LOGIN_FAILURE:8>>,
