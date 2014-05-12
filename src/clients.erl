@@ -113,8 +113,6 @@ send(Clients, Type, Packet) ->
 	lists:foreach(fun(IoClient) -> io_worker:cast(IoClient, {send, Type, Packet}) end, Clients).
 
 table(Clients, TableId, Time, UserId, Name, Description) ->
-	report(1, "table name", Name),
-	report(1, "name len", string:len(Name)),
 	Sockets = online_users(TableId, UserId, Clients),
 	NameBin = list_to_binary(Name),
 	NameLength = string:len(Name),
