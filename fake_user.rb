@@ -2,6 +2,7 @@
 
 require 'socket'
 require 'thread'
+require 'bindata'
 
 class ClientPacket
 	REGISTER = 0
@@ -42,8 +43,36 @@ class ClientPacket
 		attributes << @packet_type
 		attributes << packet.bytesize * 8
 
-		puts  attributes.pack("Cs>").inspect
 		return attributes.pack("Cs>") + packet
+	end
+end
+
+REGISTER = 0
+LOGIN = 1
+GLOBAL_TABLE_ID = 2
+GLOBAL_TASK_ID = 3
+TABLE_CHANGE = 4
+TASK_CHANGE = 5
+PERMISSION = 6
+COMMENTARY = 7
+USER = 8
+
+class RegisterPacker < BinData::Record
+ 	endian :big
+	uint8 :type
+	uint16 :len
+	uint8 :status
+end
+
+class LoginPacket < BinData::Record
+	endian :big
+	uint8 :type
+	uint16 :len
+	uint8 :status
+	uint32 :user_id, :onlyif => :succeeded?
+
+	def succeeded?
+		return status.zero?
 	end
 end
 
@@ -57,7 +86,42 @@ class Client
 	def login
 		send ClientPacket.new(ClientPacket::LOGIN).add(@name).add(@password)
 	end
+
+	def make_table
+		
+	end
+
+	def make_task
+	end
+
+	def make_comment
+	end
+
+	def change_table
+	end
+
+	def change_task
+	end
+
+	def change_permission
+	end
+
+	def find_user
+	end
+
+	def do_register packet
+		puts "Register packet"
+		register_packet = RegisterPacker.read packet
+	end
+
+	def do_login packet
+		puts "Login packet"
+		login_packet = LoginPacket.read packet
+		if login_packet.succeeded? then @id = login_packet.user_id end
+	end
 end
+
+MAX_PACKET_SIZE = 60000
 
 class User < Client
 	def initialize params
@@ -73,8 +137,8 @@ class User < Client
 	def listen
 		@request = Thread.new do
 			loop do
-				packet = @socket.gets.chomp
-				puts packet
+				packet = @socket.recv(MAX_PACKET_SIZE)
+				parse packet
 			end
 		end
 	end
@@ -92,11 +156,23 @@ class User < Client
 		@socket.puts packet.pack
 	end
 
+	def parse packet
+		type = packet.bytes.to_a[0][0]
+		case type
+		when REGISTER
+			do_register packet
+		when LOGIN
+			do_login packet
+		end
+	end
+
 	def make_something
 		if @id.nil? then
 			auth
 		else
-			make_table
+			[method(:make_table), method(:make_task), method(:make_comment), 
+				method(:change_table), method(:change_task), method(:change_permission), 
+					method(:find_user)].sample.call
 		end
 	end
 
@@ -121,6 +197,7 @@ begin
 		users_threads << Thread.new() {
 			User.new params
 		}
+		Signal.trap("CLD") do Thread.kill user_threads.last end
 	end
 
 	users_threads.each do |user|
