@@ -90,11 +90,6 @@ REGISTER = 0
 LOGIN = 1
 GLOBAL_TABLE_ID = 2
 GLOBAL_TASK_ID = 3
-TABLE_CHANGE = 4
-TASK_CHANGE = 5
-PERMISSION = 6
-COMMENTARY = 7
-USER = 8
 
 class ServerPacket < BinData::Record
 	endian :big
@@ -113,6 +108,17 @@ class LoginPacket < ServerPacket
 	def succeeded?
 		return status.zero?
 	end
+end
+
+class GlobalTablePacket < ServerPacket
+	uint32 :table_id
+	uint32 :global_id
+end
+
+class GlobalTaskPacket < ServerPacket
+	uint32 :task_id
+	uint32 :global_id
+	uint32 :global_table_id
 end
 
 ###
@@ -168,6 +174,10 @@ class Client
 			do_register packet
 		when LOGIN
 			do_login packet
+		when GLOBAL_TABLE_ID
+			do_global_table packet
+		when GLOBAL_TASK_ID
+			do_global_task packet
 		end
 	end
 
@@ -230,6 +240,16 @@ class Client
 		end
 	end
 
+	def do_global_table packet
+		global_table = GlobalTablePacket.read packet
+		update_global_table global_table.table_id, global_table.global_id
+	end
+
+	def do_global_task packet
+		global_task = GlobalTaskPacket.read packet
+		update_global_task global_task.task_id global_task.global_id, global_task.global_table_id
+	end
+
 	public :run
 	protected :register, :login, :_make_table, :_make_task, :_make_comment,
 		:_change_table, :_change_task, :_change_permission
@@ -270,7 +290,6 @@ class User < Client
 	end
 
 	def auth
-		puts "Auth"
 		@name.nil? ? register : login
 	end
 
@@ -354,7 +373,16 @@ class User < Client
 		return task_id, global_task_id
 	end
 
-	protected :make_something
+	def update_global_table table_id, global_id
+		@global_table_id[table_id] = global_id
+	end
+
+	def update_global_task task_id, global_id, global_table_id
+		table_id = @global_table_id.index global_table_id
+		@global_task_id[table_id][task_id] = global_id
+	end
+
+	protected :make_something, :update_global_table, :update_global_task
 	private :generate_new_table, :generate_new_task, :generate_table_data, :generate_task_data, :get_table_id, :get_task_id, 
 		:auth, :make_table, :make_task, :make_comment, :change_table, :change_task, :change_permission
 end
