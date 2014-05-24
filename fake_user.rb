@@ -125,13 +125,20 @@ end
 ### пакетов на сервер.
 ###
 
+MAX_PACKET_SIZE = 60000
+
 class Client
 	def initialize params
 		@socket = TCPSocket.open params.host, params.port
 		@request = nil
 		@responce = nil
+
+		@timeout = params.timeout
+	end
+
+	def run
 		listen
-		run params.timeout
+		make @timeout
 		@responce.join
 		@request.join
 	end
@@ -145,7 +152,7 @@ class Client
 		end
 	end
 
-	def run timeout
+	def make timeout
 		@responce = Thread.new do
 			loop do
 				make_something
@@ -182,22 +189,22 @@ class Client
 		send ClientPacket.new(ClientPacket::LOGIN).add(@name).add(@password)
 	end
 
-	def make_table table_id, name, description
+	def _make_table table_id, name, description
 	end
 
-	def make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
+	def _make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
 	end
 
-	def make_comment global_table_id, global_task_id, text
+	def _make_comment global_table_id, global_task_id, text
 	end
 
-	def change_table global_table_id, name, description
+	def _change_table global_table_id, name, description
 	end
 
-	def change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
+	def _change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
 	end
 
-	def change_permission global_table_id, user_id, permission
+	def _change_permission global_table_id, user_id, permission
 	end
 
 	def do_register packet
@@ -214,9 +221,14 @@ class Client
 			register
 		end
 	end
+
+	public :run
+	protected :register, :login, :_make_table, :_make_task, :_make_comment,
+		:_change_table, :_change_task, :_change_permission
+	private :listen, :make, :send, :parse,
+		:do_register, :do_login
 end
 
-MAX_PACKET_SIZE = 60000
 MAX_PERMISSION_TYPE = 2
 
 ###
@@ -227,10 +239,13 @@ class User < Client
 	def initialize params
 		super params
 
-		# Номер последней созданной таблицы
+		# Номер последней созданной таблицы.
 		@table_id = 0
 
-		# Номера последних заданий для каждой таблицы
+		# Ассоциация номеров таблиц с глобальной базой данных.
+		@global_table_id = Array.new
+
+		# Номера последних заданий для каждой таблицы.
 		@task_id = Array.new
 
 		# Ассоциация номером заданий с заданиями в глобпальной базе данных.
@@ -255,44 +270,42 @@ class User < Client
 		puts "Make Table"
 		new_table_id = generate_new_table
 		name, description = generate_table_data
-		make_table table_id, name, description
+		_make_table new_table_id, name, description
 	end
 
 	def make_task
 		puts "Make task"
 		table_id, global_table_id = get_table_id
-		return if task_id[table_id].nil?
+		return if table_id.nil? or @task_id[table_id].nil?
 		new_task_id = generate_new_task table_id
 		name, description, start_date, end_date, start_time, end_time, period = generate_task_data
-		make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
+		_make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
 	end
 
 	def make_comment
 		puts "Make comment"
 		table_id, global_table_id = get_table_id
-		return if task[table_id].nil?
 		task_id, global_task_id = get_task_id table_id
 		return if task_id.nil?
 		text = generate_str 20
-		make_comment global_table_id, global_task_id, text
+		_make_comment global_table_id, global_task_id, text
 	end
 
 	def change_table
-		puts "Chagne table"
+		puts "Change table"
 		table_id, global_table_id = get_table_id
 		return if table_id.nil?
 		name, description = generate_table_data
-		change_table global_table_id, name, description
+		_change_table global_table_id, name, description
 	end
 
 	def change_task
 		puts "Change task"
 		table_id, global_table_id = get_table_id
-		return if table_id.nil?
 		task_id, global_task_id = get_task_id table_id
 		return if task_id.nil?
 		name, description, start_date, end_date, start_time, end_time, period = generate_task_data
-		change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
+		_change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
 	end
 
 	def change_permission
@@ -301,18 +314,20 @@ class User < Client
 		return if table_id.nil?
 		user_id = generate_user_id
 		permission = rand(MAX_PERMISSION_TYPE)
-		change_permission global_table_id, user_id, permission
+		_change_permission global_table_id, user_id, permission
 	end
 
 	def generate_new_table
-		new_table_id = (@table_id += 1)
+		new_table_id = @table_id
+		@table_id += 1
 		@task_id[new_table_id] = 0
 		@global_table_id[new_table_id] = 0
 		return new_table_id
 	end
 
 	def generate_new_task table_id		
-		new_task_id = (@task_id[table_id] += 1)
+		new_task_id = @task_id[table_id]
+		@task_id += 1
 		@global_task_id[table_id] = Array.new if @global_task_id[table_id].nil?
 		@global_task_id[table_id][new_task_id] = 0
 		return new_task_id
@@ -323,8 +338,6 @@ class User < Client
 	end
 
 	def get_table_id
-		@global_table_id = Array.new if @global_table_id.nil?
-		puts @global_table_id
 		global_table_id = @global_table_id.select{|global_id| global_id.nonzero?}.sample
 		return nil, nil if global_table_id.nil?
 		table_id = @global_table_id.index global_table_id
@@ -332,13 +345,13 @@ class User < Client
 	end
 
 	def get_task_id table_id
+		return nil, nil if table_id.nil? or @task_id[table_id].zero?
 		global_task_id = @global_task_id[table_id].select{|global_id| global_id.nonzero?}.sample
 		return nil, nil if global_task_id.nil?
 		task_id = @global_task_id.index global_task_id
 		return task_id, global_task_id
 	end
 
-	public
 	protected :make_something
 	private :generate_new_table, :generate_new_task, :generate_table_data, :generate_task_data, :get_table_id, :get_task_id, 
 		:auth, :make_table, :make_task, :make_comment, :change_table, :change_task, :change_permission
@@ -360,7 +373,7 @@ begin
 	users_threads = []
 	params.threads_count.times do
 		users_threads << Thread.new() {
-			User.new params
+			User.new(params).run
 		}
 		Signal.trap("CLD") do Thread.kill user_threads.last end
 	end
