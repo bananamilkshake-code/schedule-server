@@ -1,10 +1,44 @@
 #!/usr/bin/ruby
 
+### Скрипт, иммитирующий работу пользователей для приложения Open Schedule.
+### Испльзовался для проведения нагрузочного тестирования серверной
+### части приложения.
+
 require 'socket'
 require 'thread'
 require 'bindata'
 
+# Генерирует случайную последовательность символов длиной len.
+def generate_str len
+	return (0..len).map { ('a'..'z').to_a.sample }.join
+end
+
+def generate_table_data
+	name = generate_str 5
+	description = generate_str 5
+	return name, description
+end
+
+def generate_task_data
+	name = generate_str 5
+	description = generate_str 5
+	# По сути без разницы, какое значение будет в этих полях, 
+	# поэтому заполним их любыми значениями, которые могут быть
+	# прочитаны как "yyyyMMdd" и "HHmm"
+	start_date = "20001010"
+	end_date = "20001010"
+	start_time = "1120"
+	end_time = "1230"
+	period = rand(1..30)
+	return name, description, start_date, end_date, start_time, end_time, period
+end
+
+###
+### Пакет, который отправлякется с клиентского приложения.
+###
 class ClientPacket
+
+	# Номера пакетов
 	REGISTER = 0
 	LOGIN = 1
 	CREATE_TABLE = 2
@@ -14,21 +48,24 @@ class ClientPacket
 	PERMISSION = 6
 	COMMENTARY = 7
 
+	# Маски пакетоа.
 	MASK = [
-		"S>A*S>A*",				# REGISTER
-		"S>A*S>A*",				# LOGIN
-		"L>Q>S>A*S>A*",			# CREATE_TABLE
+		"S>A*S>A*",		# REGISTER
+		"S>A*S>A*",		# LOGIN
+		"L>Q>S>A*S>A*",		# CREATE_TABLE
 		"L>L>Q>S>A*S>A*A*A*A*A*",# CREATE_TASK
-		"L>Q>S>A*S>A*",			# TABLE_CHANGE
+		"L>Q>S>A*S>A*",		# TABLE_CHANGE
 		"L>L>Q>S>A*S>A*A*A*A*A*",# TASK_CHANGE
-		"L>L>C",				# PERMISSION
-		"L>L>Q>S>sA*"			# COMMENTARY
+		"L>L>C",		# PERMISSION
+		"L>L>Q>S>sA*"		# COMMENTARY
 	]
 
 	def initialize packet_type
 		@packet_type = packet_type
 	end
 
+	# Добавление данных в пакет. Для реализации цеполчки вызовов,
+	# метод возвращает указатель на self.
 	def add data
 		@data = Array.new if @data.nil?
 		@data << data.bytesize * 8 if data.is_a? String
@@ -36,6 +73,8 @@ class ClientPacket
 		return self
 	end
 
+	# Преобразуем данные к определенному формаату. Добавляем
+	# в начало номер пакета и размер пакета.
 	def pack
 		packet = @data.pack(MASK[@packet_type])
 
@@ -47,6 +86,10 @@ class ClientPacket
 	end
 end
 
+###
+### Серверные пакеты, приходящие на клиентское приложение
+###
+
 REGISTER = 0
 LOGIN = 1
 GLOBAL_TABLE_ID = 2
@@ -57,17 +100,17 @@ PERMISSION = 6
 COMMENTARY = 7
 USER = 8
 
-class RegisterPacker < BinData::Record
- 	endian :big
-	uint8 :type
-	uint16 :len
-	uint8 :status
-end
-
-class LoginPacket < BinData::Record
+class ServerPacket < BinData::Record
 	endian :big
 	uint8 :type
 	uint16 :len
+end
+
+class RegisterPacker < ServerPacket
+	uint8 :status
+end
+
+class LoginPacket < ServerPacket
 	uint8 :status
 	uint32 :user_id, :onlyif => :succeeded?
 
@@ -76,54 +119,13 @@ class LoginPacket < BinData::Record
 	end
 end
 
+###
+### Класс, имитирующий работу клиентской части
+### приложения. Отвечает за формирование и отправку 
+### пакетов на сервер.
+###
+
 class Client
-	def register
-		@name = (0...15).map { ('a'..'z').to_a[rand(26)] }.join
-		@password = (0...15).map { ('a'..'z').to_a[rand(26)] }.join
-		send ClientPacket.new(ClientPacket::REGISTER).add(@name).add(@password)
-	end
-
-	def login
-		send ClientPacket.new(ClientPacket::LOGIN).add(@name).add(@password)
-	end
-
-	def make_table
-		
-	end
-
-	def make_task
-	end
-
-	def make_comment
-	end
-
-	def change_table
-	end
-
-	def change_task
-	end
-
-	def change_permission
-	end
-
-	def find_user
-	end
-
-	def do_register packet
-		puts "Register packet"
-		register_packet = RegisterPacker.read packet
-	end
-
-	def do_login packet
-		puts "Login packet"
-		login_packet = LoginPacket.read packet
-		if login_packet.succeeded? then @id = login_packet.user_id end
-	end
-end
-
-MAX_PACKET_SIZE = 60000
-
-class User < Client
 	def initialize params
 		@socket = TCPSocket.open params.host, params.port
 		@request = nil
@@ -166,25 +168,188 @@ class User < Client
 		end
 	end
 
+	# Регистрация нового клиента. Генерируем случайные логин и пароль и
+	# отправляем на сервер.
+	def register
+		puts "Register"
+		@name = generate_str 15
+		@password = generate_str 15
+		send ClientPacket.new(ClientPacket::REGISTER).add(@name).add(@password)
+	end
+
+	def login
+		puts "Login"
+		send ClientPacket.new(ClientPacket::LOGIN).add(@name).add(@password)
+	end
+
+	def make_table table_id, name, description
+	end
+
+	def make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
+	end
+
+	def make_comment global_table_id, global_task_id, text
+	end
+
+	def change_table global_table_id, name, description
+	end
+
+	def change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
+	end
+
+	def change_permission global_table_id, user_id, permission
+	end
+
+	def do_register packet
+		puts "Register server packet received"
+		register_packet = RegisterPacker.read packet
+	end
+
+	def do_login packet
+		puts "Login server packet received"
+		login_packet = LoginPacket.read packet
+		if login_packet.succeeded? then 
+			@id = login_packet.user_id 
+		else
+			register
+		end
+	end
+end
+
+MAX_PACKET_SIZE = 60000
+MAX_PERMISSION_TYPE = 2
+
+###
+### Имитация логики работы клиентского приложения. Совершает некоторые действия
+### через заданныей промежуток времени.
+###
+class User < Client
+	def initialize params
+		super params
+
+		# Номер последней созданной таблицы
+		@table_id = 0
+
+		# Номера последних заданий для каждой таблицы
+		@task_id = Array.new
+
+		# Ассоциация номером заданий с заданиями в глобпальной базе данных.
+		@global_task_id = Array.new
+	end
+
 	def make_something
 		if @id.nil? then
 			auth
 		else
 			[method(:make_table), method(:make_task), method(:make_comment), 
-				method(:change_table), method(:change_task), method(:change_permission), 
-					method(:find_user)].sample.call
+				method(:change_table), method(:change_task), method(:change_permission)].sample.call
 		end
 	end
 
 	def auth
+		puts "Auth"
 		@name.nil? ? register : login
 	end
+
+	def make_table
+		puts "Make Table"
+		new_table_id = generate_new_table
+		name, description = generate_table_data
+		make_table table_id, name, description
+	end
+
+	def make_task
+		puts "Make task"
+		table_id, global_table_id = get_table_id
+		return if task_id[table_id].nil?
+		new_task_id = generate_new_task table_id
+		name, description, start_date, end_date, start_time, end_time, period = generate_task_data
+		make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
+	end
+
+	def make_comment
+		puts "Make comment"
+		table_id, global_table_id = get_table_id
+		return if task[table_id].nil?
+		task_id, global_task_id = get_task_id table_id
+		return if task_id.nil?
+		text = generate_str 20
+		make_comment global_table_id, global_task_id, text
+	end
+
+	def change_table
+		puts "Chagne table"
+		table_id, global_table_id = get_table_id
+		return if table_id.nil?
+		name, description = generate_table_data
+		change_table global_table_id, name, description
+	end
+
+	def change_task
+		puts "Change task"
+		table_id, global_table_id = get_table_id
+		return if table_id.nil?
+		task_id, global_task_id = get_task_id table_id
+		return if task_id.nil?
+		name, description, start_date, end_date, start_time, end_time, period = generate_task_data
+		change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
+	end
+
+	def change_permission
+		puts "Change permission"
+		table_id, global_table_id = get_table_id
+		return if table_id.nil?
+		user_id = generate_user_id
+		permission = rand(MAX_PERMISSION_TYPE)
+		change_permission global_table_id, user_id, permission
+	end
+
+	def generate_new_table
+		new_table_id = (@table_id += 1)
+		@task_id[new_table_id] = 0
+		@global_table_id[new_table_id] = 0
+		return new_table_id
+	end
+
+	def generate_new_task table_id		
+		new_task_id = (@task_id[table_id] += 1)
+		@global_task_id[table_id] = Array.new if @global_task_id[table_id].nil?
+		@global_task_id[table_id][new_task_id] = 0
+		return new_task_id
+	end
+
+	def generate_user_id
+		return rand(1..@id-1)
+	end
+
+	def get_table_id
+		@global_table_id = Array.new if @global_table_id.nil?
+		puts @global_table_id
+		global_table_id = @global_table_id.select{|global_id| global_id.nonzero?}.sample
+		return nil, nil if global_table_id.nil?
+		table_id = @global_table_id.index global_table_id
+		return table_id, global_table_id
+	end
+
+	def get_task_id table_id
+		global_task_id = @global_task_id[table_id].select{|global_id| global_id.nonzero?}.sample
+		return nil, nil if global_task_id.nil?
+		task_id = @global_task_id.index global_task_id
+		return task_id, global_task_id
+	end
+
+	public
+	protected :make_something
+	private :generate_new_table, :generate_new_task, :generate_table_data, :generate_task_data, :get_table_id, :get_task_id, 
+		:auth, :make_table, :make_task, :make_comment, :change_table, :change_task, :change_permission
 end
 
-Params = Struct.new(:host, :port, :threads_count, :timeout) do
-end
-
+Params = Struct.new(:host, :port, :threads_count, :timeout) do end
 begin
+	# В командной строке передаем адрес и порт, на котором запущен
+	# сервер, количество потоков выполнения (количество пользователей),
+	# и с какой частотой пользователи будут совершать действия.
+
 	host = ARGV[0]
 	port = ARGV[1].to_i
 	threads_count = ARGV[2].to_i
