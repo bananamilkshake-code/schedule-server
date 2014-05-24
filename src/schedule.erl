@@ -44,16 +44,16 @@
 %%% @doc Starts the Schedule Server application with the supervision timings provided
 %%%
 start( _, Timing) ->
-  jdb:configure(),
-  case main_sup:start_link(Timing) of
-  ignore ->
-    report(0, "Unable to load Schedule Server application", ignore),
-    {error, ignore};
-  Error = {error, _} ->
-    report(0, "Unable to load Schedule Server application", Error);
-  Ret -> 
-    Ret
-  end.
+	jdb:configure(),
+	case main_sup:start_link(Timing) of
+	ignore ->
+		report(0, "Unable to load Schedule Server application", ignore),
+		{error, ignore};
+	Error = {error, _} ->
+		report(0, "Unable to load Schedule Server application", Error);
+	Ret -> 
+		Ret
+	end.
  
 %%% @spec stop(Reason) -> Result
 %%%     Reason = term()
@@ -63,5 +63,5 @@ start( _, Timing) ->
 %%% @doc Stops the Schedule Server application.
 %%%
 stop( _ ) ->
-  error_logger:logfile(close),
-  ok.
+	error_logger:logfile(close),
+	ok.

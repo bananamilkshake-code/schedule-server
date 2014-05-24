@@ -25,59 +25,59 @@
 %%% -----------------------------------------------------
 
 {application, schedule,
-  [
-    {
-      description,
-      "Schedule Server"
-    },
-    {
-      registered,
-      [
-        schedule,
-        database,
-        main_sup,
-        acceptor,
-        io_sup,
-        io_worker
-      ]
-    },
-    {
-      modules, 
-      [
-        schedule,
-        database,
-        main_sup,
-        acceptor,
-        io_sup
-      ]
-    },
-    {
-      vsn, "0.1"
-    },
-    { 
-      mod, 
-      {schedule, {2, 3600}} % Maximum restart frequency (for internal supervisor).
-    },
-    { 
-      env, 
-      [
-        {logfile, {open, "../log.txt"}},
-        {database_params, "DSN=mysql;DRIVER=MySQL;UID=root;PWD=finncrisporiginal;DATABASE=schedule"},
-        {loglevel, 1},
-        {tcp_port, 4567},    % which port socket must bind.
-        {max_token, 999999 },   % maximum token to generate.
-        {sleep_time, 200},
-        {timeout, 2500},    % tcp session timeout
-        {is_tty, true}    % tty logging switcher
-      ]
-    },
-    {
-      applications,
-      [
-        kernel,
-        stdlib,
-        sasl
-      ]
-    }
-  ]
+	[
+		{
+			description,
+			"Schedule Server"
+		},
+		{
+			registered,
+			[
+				schedule,
+				database,
+				main_sup,
+				acceptor,
+				io_sup,
+				io_worker
+			]
+		},
+		{
+			modules, 
+			[
+				schedule,
+				database,
+				main_sup,
+				acceptor,
+				io_sup
+			]
+		},
+		{
+			vsn, "0.1"
+		},
+		{ 
+			mod, 
+			{schedule, {2, 3600}} % Maximum restart frequency (for internal supervisor).
+		},
+		{ 
+			env, 
+			[
+				{logfile, {open, "../log.txt"}},
+				{database_params, "DSN=mysql;DRIVER=MySQL;UID=root;PWD=finncrisporiginal;DATABASE=schedule"},
+				{loglevel, 1},
+				{tcp_port, 4567},    % which port socket must bind.
+				{max_token, 999999 },   % maximum token to generate.
+				{sleep_time, 200},
+				{timeout, 2500},    % tcp session timeout
+				{is_tty, true}    % tty logging switcher
+			]
+		},
+		{
+			applications,
+			[
+				kernel,
+				stdlib,
+				sasl
+			]
+		}
+	]
 }.

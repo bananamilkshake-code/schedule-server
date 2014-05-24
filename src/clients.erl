@@ -45,13 +45,13 @@
 	}).
 
 start_link(Args) ->
-  report(1, "Starting clients storage"),
-  gen_server:start_link(
-    {local, ?MODULE},
-    ?MODULE,
-    Args, 
-    []
-  ).
+	report(1, "Starting clients storage"),
+	gen_server:start_link(
+		{local, ?MODULE},
+		?MODULE,
+		Args, 
+		[]
+	).
 
 init(_Args) ->
 	Clients = ets:new(clients_storage, [set, protected, named_table, {write_concurrency, true}, {read_concurrency, true}, {keypos, #client.id}]),

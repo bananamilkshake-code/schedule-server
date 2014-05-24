@@ -48,25 +48,25 @@
 %%% @doc Initializes Schedule Server major modules with the supervision timings provided
 %%%
 start_link({MaxR, MaxT}) ->
-  supervisor:start_link(
-    {local, ?MODULE},
-    ?MODULE,
-    {MaxR, MaxT}
-  ).
+	supervisor:start_link(
+		{local, ?MODULE},
+		?MODULE,
+		{MaxR, MaxT}
+	).
 
 %%% @private
 %%% @doc Starts acceptor and superviser for io processes
 init({MaxR, MaxT}) ->
-  report(1, "Schedule Server main supervisor initializing"),
-  DatabaseParams = getenv(database_params, "Database params not presented in .app file"),
-  {ok,
-    {
-      {one_for_one, MaxR, MaxT},
-      [%<Internal name> <Module name> <Start func> <Arguments> <Restart type> <Exit timeout> <Process type> <Depends>
-        {acceptor, {acceptor, start_link, [null]}, transient, 1000, worker, [acceptor]},
-        {io_sup, {io_sup, start_link, [{MaxR, MaxT, 100}]}, transient, infinity, supervisor, [io_sup]},
-        {database, {database, start_link, [DatabaseParams]}, transient, 1000, worker, [database]},
-        {clients, {clients, start_link, [null]}, transient, 1000, worker, [clients]}
-      ]
-    }
-  }.
+	report(1, "Schedule Server main supervisor initializing"),
+	DatabaseParams = getenv(database_params, "Database params not presented in .app file"),
+	{ok,
+		{
+			{one_for_one, MaxR, MaxT},
+			[%<Internal name> <Module name> <Start func> <Arguments> <Restart type> <Exit timeout> <Process type> <Depends>
+				{acceptor, {acceptor, start_link, [null]}, transient, 1000, worker, [acceptor]},
+				{io_sup, {io_sup, start_link, [{MaxR, MaxT, 100}]}, transient, infinity, supervisor, [io_sup]},
+				{database, {database, start_link, [DatabaseParams]}, transient, 1000, worker, [database]},
+				{clients, {clients, start_link, [null]}, transient, 1000, worker, [clients]}
+			]
+		}
+	}.

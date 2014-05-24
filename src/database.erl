@@ -41,12 +41,12 @@
 
 start_link(Params) ->
 	report(1, "Starting database"),
-  gen_server:start_link(
-    {local, ?MODULE},
-    ?MODULE,
-    Params, 
-    []
-  ).
+	gen_server:start_link(
+		{local, ?MODULE},
+		?MODULE,
+		Params, 
+		[]
+	).
 
 %% Callbacks:  
 %% @doc Creates database schema and loads data from saved tables
@@ -60,63 +60,63 @@ init(Params) ->
 
 %% @doc Closes database connection when server stops
 terminate(Reason, DBHandler) ->
-  report(1, "Terminating database"), 
-  report(2, "Reason", Reason),
-  odbc:disconnect(DBHandler).
+	report(1, "Terminating database"), 
+	report(2, "Reason", Reason),
+	odbc:disconnect(DBHandler).
 
 %% @doc Handles message from the port. Since server is in active mode, all the messages are 
 %% comming to the process as special Erlang messages.
 handle_info(Data, DBHandler) ->
-  report(0, "Wrong info in Schedule Server database", Data),
-  {noreply, DBHandler}.
+	report(0, "Wrong info in Schedule Server database", Data),
+	{noreply, DBHandler}.
 
 %% @doc Handles database command
 handle_call({check_username, Login}, _From, DBHandler) ->
-  Ret = check_username(DBHandler, Login),
-  {reply, Ret, DBHandler};
+	Ret = check_username(DBHandler, Login),
+	{reply, Ret, DBHandler};
 handle_call({register, Login, Password}, _From, DBHandler) ->
-  Ret = register(DBHandler, Login, Password),
-  {reply, Ret, DBHandler};
+	Ret = register(DBHandler, Login, Password),
+	{reply, Ret, DBHandler};
 handle_call({auth, Login, Password}, _From, DBHandler) ->
-  Ret = auth(DBHandler, Login, Password),
-  {reply, Ret, DBHandler};
+	Ret = auth(DBHandler, Login, Password),
+	{reply, Ret, DBHandler};
 handle_call({create_new_table, User, Time, Name, Description}, _From, DBHandler) ->
-  Ret = create_new_table(DBHandler, User, Time, Name, Description),
-  {reply, Ret, DBHandler};
+	Ret = create_new_table(DBHandler, User, Time, Name, Description),
+	{reply, Ret, DBHandler};
 handle_call({create_new_task, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, _From, DBHandler) ->
-  Ret = create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
-  {reply, Ret, DBHandler};
+	Ret = create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	{reply, Ret, DBHandler};
 handle_call({get_readers, TableId, UserId}, _From, DBHandler) ->
-  Ret = get_readers(DBHandler, TableId, UserId),
-  {reply, Ret, DBHandler};
+	Ret = get_readers(DBHandler, TableId, UserId),
+	{reply, Ret, DBHandler};
 handle_call({check_permission, UserId, TableId, Permission}, _From, DBHandler) ->
-  Ret = check_permission(DBHandler, UserId, TableId, Permission),
-  {reply, Ret, DBHandler};
+	Ret = check_permission(DBHandler, UserId, TableId, Permission),
+	{reply, Ret, DBHandler};
 handle_call(Call, From, _DBHandler) ->
-  {stop, "Wrong database call", {Call, From}}.
+	{stop, "Wrong database call", {Call, From}}.
 
 handle_cast({create_commentary, User, Table, Task, Time, Commentary}, DBHandler) ->
-  create_commentary(DBHandler, User, Table, Task, Time, Commentary),
-  {noreply, DBHandler};
+	create_commentary(DBHandler, User, Table, Task, Time, Commentary),
+	{noreply, DBHandler};
 handle_cast({change_table, User, Table, Time, Name, Description}, DBHandler) ->
-  change_table(DBHandler, User, Table, Time, Name, Description),
-  {noreply, DBHandler};
+	change_table(DBHandler, User, Table, Time, Name, Description),
+	{noreply, DBHandler};
 handle_cast({change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, DBHandler) ->
-  change_task(DBHandler, Table, Task, Time, User, Name, Description, StartDate, EndDate, StartTime, EndTime),
-  {noreply, DBHandler};
+	change_task(DBHandler, Table, Task, Time, User, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	{noreply, DBHandler};
 handle_cast({change_permission, User, Table, Permission}, DBHandler) ->
-  change_permission(DBHandler, User, Table, Permission),
-  {noreply, DBHandler};
+	change_permission(DBHandler, User, Table, Permission),
+	{noreply, DBHandler};
  handle_cast({logout_update, User}, DBHandler) ->
-  logout_update(DBHandler, User),
-  {noreply, DBHandler}; 
+	logout_update(DBHandler, User),
+	{noreply, DBHandler}; 
 handle_cast(Data, DBHandler) ->
-  report(0, "Wrong cast in Schedule Server database", Data),
-  {noreply, DBHandler}.
+	report(0, "Wrong cast in Schedule Server database", Data),
+	{noreply, DBHandler}.
 
 code_change(_, DBHandler, _) ->
-  report(1, "Code change in Schedule Server database"),
-  {ok, DBHandler}.
+	report(1, "Code change in Schedule Server database"),
+	{ok, DBHandler}.
 
 %% Publc
 check_username(Login) ->

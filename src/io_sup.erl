@@ -50,8 +50,8 @@
 %%% @doc Starts new Schedule Server processor and returns its PID.
 %%%
 start_io(Socket) ->
-  report(1, "Child creating in IO supervisor"),
-  supervisor:start_child(?MODULE, [Socket]).
+	report(1, "Child creating in IO supervisor"),
+	supervisor:start_child(?MODULE, [Socket]).
 
 %%% @spec start_link( Timing) -> Result
 %%%    Timing = { MaxR, MaxT, Await} 
@@ -63,26 +63,26 @@ start_io(Socket) ->
 %%% @doc Initializes Schedule Server processors and handles them.
 %%%
 start_link({MaxR, MaxT, Await}) ->
-  report(1, "Starting IO supervisor"),
-  supervisor:start_link(
-    {local, ?MODULE},
-    ?MODULE,
-    {MaxR, MaxT, Await} %% @see supervisor manual.
-  ).
+	report(1, "Starting IO supervisor"),
+	supervisor:start_link(
+		{local, ?MODULE},
+		?MODULE,
+		{MaxR, MaxT, Await} %% @see supervisor manual.
+	).
 
 %% Callbacks:
 %%% @private
 %%% @doc Starts simple one-for-one supervisor, producing io_worker modules.
 %%%
 init({MaxR, MaxT, Await}) ->
-  report(1, "IO supervisor starting"),
-  {ok, 
-    {
-      {simple_one_for_one , MaxR, MaxT}, 
-      [   
-        {   
-          io_worker, {io_worker, start_link, []}, temporary, Await, worker, [io] % See supervisor behaviour articles
-        }
-      ]
-    }
-  }.
+	report(1, "IO supervisor starting"),
+	{ok, 
+		{
+			{simple_one_for_one , MaxR, MaxT}, 
+			[
+				{
+					io_worker, {io_worker, start_link, []}, temporary, Await, worker, [io] % See supervisor behaviour articles
+				}
+			]
+		}
+	}.
