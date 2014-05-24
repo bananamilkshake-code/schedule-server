@@ -50,14 +50,14 @@ class ClientPacket
 
 	# Маски пакетоа.
 	MASK = [
-		"S>A*S>A*",		# REGISTER
-		"S>A*S>A*",		# LOGIN
+		"S>A*S>A*",			# REGISTER
+		"S>A*S>A*",			# LOGIN
 		"L>Q>S>A*S>A*",		# CREATE_TABLE
-		"L>L>Q>S>A*S>A*A*A*A*A*",# CREATE_TASK
+		"L>L>Q>S>A*S>A*A*A*A*",# CREATE_TASK
 		"L>Q>S>A*S>A*",		# TABLE_CHANGE
-		"L>L>Q>S>A*S>A*A*A*A*A*",# TASK_CHANGE
-		"L>L>C",		# PERMISSION
-		"L>L>Q>S>sA*"		# COMMENTARY
+		"L>L>Q>S>A*S>A*A*A*A*",# TASK_CHANGE
+		"L>L>C",			# PERMISSION
+		"L>L>Q>S>A*"		# COMMENTARY
 	]
 
 	def initialize packet_type
@@ -77,11 +77,7 @@ class ClientPacket
 	# в начало номер пакета и размер пакета.
 	def pack
 		packet = @data.pack(MASK[@packet_type])
-
-		attributes = Array.new
-		attributes << @packet_type
-		attributes << packet.bytesize * 8
-
+		attributes = [@packet_type, packet.bytesize * 8]
 		return attributes.pack("Cs>") + packet
 	end
 end
@@ -146,7 +142,7 @@ class Client
 	def listen
 		@request = Thread.new do
 			loop do
-				packet = @socket.recv(MAX_PACKET_SIZE)
+				packet = @socket.recv MAX_PACKET_SIZE
 				parse packet
 			end
 		end
@@ -162,7 +158,7 @@ class Client
 	end
 
 	def send packet
-		@socket.puts packet.pack
+		@socket.write packet.pack
 	end
 
 	def parse packet
@@ -178,42 +174,54 @@ class Client
 	# Регистрация нового клиента. Генерируем случайные логин и пароль и
 	# отправляем на сервер.
 	def register
-		puts "Register"
 		@name = generate_str 15
 		@password = generate_str 15
 		send ClientPacket.new(ClientPacket::REGISTER).add(@name).add(@password)
 	end
 
 	def login
-		puts "Login"
 		send ClientPacket.new(ClientPacket::LOGIN).add(@name).add(@password)
 	end
 
 	def _make_table table_id, name, description
+		time = Time.now.to_i
+		send ClientPacket.new(ClientPacket::CREATE_TABLE).add(table_id).add(time)
+				.add(name).add(description)
 	end
 
 	def _make_task global_table_id, new_task_id, name, description, start_date, end_date, start_time, end_time, period
+		time = Time.now.to_i
+		send ClientPacket.new(ClientPacket::CREATE_TASK).add(new_task_id).add(global_table_id).add(time)
+			.add(name).add(description).add(start_date).add(end_time).add(start_time).add(end_time)
 	end
 
 	def _make_comment global_table_id, global_task_id, text
+		time = Time.now.to_i
+		send ClientPacket.new(ClientPacket::COMMENTARY).add(global_table_id).ad(global_task_id)
+			.add(time).add(text)
 	end
 
 	def _change_table global_table_id, name, description
+		time = Time.now.to_i
+		send ClientPacket.new(ClientPacket::TABLE_CHANGE).add(global_table_id).add(time)
+			.add(name).add(description)
 	end
 
 	def _change_task global_table_id, global_task_id, name, description, start_date, end_date, start_time, end_time, period
+		time = Time.now.to_i
+		send ClientPacket.new(ClientPacket::TASK_CHANGE).add(global_task_id).add(global_table_id).add(time)
+			.add(name).add(description).add(start_date).add(end_time).add(start_time).add(end_time)
 	end
 
 	def _change_permission global_table_id, user_id, permission
+		send ClientPacket.new(ClientPacket::PERMISSION).add(user_id).add(global_table_id).add(permission)
 	end
 
 	def do_register packet
-		puts "Register server packet received"
 		register_packet = RegisterPacker.read packet
 	end
 
 	def do_login packet
-		puts "Login server packet received"
 		login_packet = LoginPacket.read packet
 		if login_packet.succeeded? then 
 			@id = login_packet.user_id 
@@ -267,14 +275,12 @@ class User < Client
 	end
 
 	def make_table
-		puts "Make Table"
 		new_table_id = generate_new_table
 		name, description = generate_table_data
 		_make_table new_table_id, name, description
 	end
 
 	def make_task
-		puts "Make task"
 		table_id, global_table_id = get_table_id
 		return if table_id.nil? or @task_id[table_id].nil?
 		new_task_id = generate_new_task table_id
@@ -283,7 +289,6 @@ class User < Client
 	end
 
 	def make_comment
-		puts "Make comment"
 		table_id, global_table_id = get_table_id
 		task_id, global_task_id = get_task_id table_id
 		return if task_id.nil?
@@ -292,7 +297,6 @@ class User < Client
 	end
 
 	def change_table
-		puts "Change table"
 		table_id, global_table_id = get_table_id
 		return if table_id.nil?
 		name, description = generate_table_data
@@ -300,7 +304,6 @@ class User < Client
 	end
 
 	def change_task
-		puts "Change task"
 		table_id, global_table_id = get_table_id
 		task_id, global_task_id = get_task_id table_id
 		return if task_id.nil?
@@ -309,7 +312,6 @@ class User < Client
 	end
 
 	def change_permission
-		puts "Change permission"
 		table_id, global_table_id = get_table_id
 		return if table_id.nil?
 		user_id = generate_user_id
