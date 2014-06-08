@@ -102,7 +102,7 @@ handle_cast({change_table, User, Table, Time, Name, Description}, DBHandler) ->
 	change_table(DBHandler, User, Table, Time, Name, Description),
 	{noreply, DBHandler};
 handle_cast({change_task, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, DBHandler) ->
-	change_task(DBHandler, Table, Task, Time, User, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
 	{noreply, DBHandler};
 handle_cast({change_permission, User, Table, Permission}, DBHandler) ->
 	change_permission(DBHandler, User, Table, Permission),
@@ -178,15 +178,19 @@ create_new_table(DBHandler, User, Time, Name, Description) ->
 	{ok, Table} = get_first_column(Rows, error),
 	change_table(User, Table, Time, Name, Description),
 	change_permission(User, Table, ?PERMISSION_WRITE),
-	report(1, "New table added", Table),
+	report(1, "New table added", {Table, User, Time, Name, Description}),
 	{ok, Table}.
 
 create_new_task(DBHandler, User, Table, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO tasks(table_id) VALUES(?)", [{sql_integer, [Table]}]),
-	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT max(id) AS last_id FROM tasks WHERE table_id = ?", [{sql_integer, [Table]}]),
-	{ok, Task} = get_first_column(Rows, error),
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT CAST(COALESCE(MAX(id), 0) + 1 AS UNSIGNED) AS last_id FROM tasks WHERE table_id = ?", [{sql_integer, [Table]}]),
+	{ok, TaskId} = get_first_column(Rows, error),
+	{Task, _Rest} = string:to_integer(TaskId),
+	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO tasks(id, table_id) VALUES(?,?)", 
+				[{sql_integer, [Task]},
+				 {sql_integer, [Table]}
+				]),
 	change_task(User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
-	report(1, "New task added", Task),
+	report(1, "New task added", {User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}),
 	{ok, Task}.
 
 create_commentary(DBHandler, User, Table, Task, Time, Commentary) ->
@@ -195,8 +199,9 @@ create_commentary(DBHandler, User, Table, Task, Time, Commentary) ->
 				 {sql_integer, [Table]},
 				 {sql_integer, [Task]},
 				 {{sql_varchar, 100}, [Commentary]},
-				 {sql_integer, Time}
-				]).
+				 {sql_integer, [Time]}
+				]),
+	report(1, "New comment added", {User, Table, Task, Time, Commentary}).
 
 change_table(DBHandler, User, Table, Time, Name, Description) ->
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO table_changes(table_id, time, user_id, name, description) VALUES(?, ?, ?, ?, ?)",	
@@ -205,12 +210,13 @@ change_table(DBHandler, User, Table, Time, Name, Description) ->
 				 {sql_integer, [User]},
 				 {{sql_varchar, 100}, [Name]},
 				 {{sql_varchar, 65535}, [Description]}
-				]).
+				]),
+	report(1, "Table changed", {User, Table, Time, Name, Description}).
 
 change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO task_changes(task_id, table_id, time, user_id, name, description, start_date, end_date, start_time, end_time) VALUES(?, ?, ?, ?, ?, ?, STR_TO_DATE(?, \"%d%m%Y\"), STR_TO_DATE(?, \"%d%m%Y\"), STR_TO_DATE(?, \"%h%i\"), STR_TO_DATE(?, \"%h%i\"))",	
-				[{sql_integer, [Table]},
-				 {sql_integer, [Task]},
+				[{sql_integer, [Task]},
+				 {sql_integer, [Table]},
 				 {sql_integer, [Time]},
 				 {sql_integer, [User]},
 				 {{sql_varchar, 100}, [Name]},
@@ -219,18 +225,21 @@ change_task(DBHandler, User, Table, Task, Time, Name, Description, StartDate, En
 				 {{sql_varchar, 8}, [EndDate]},
 				 {{sql_varchar, 4}, [StartTime]},
 				 {{sql_varchar, 4}, [EndTime]}
-				]).
+				]), 
+	report(1, "Task changed", {User, Table, Task, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
 
 change_permission(DBHandler, User, Table, Permission) ->
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO readers(reader_id, table_id, permission) VALUES (?, ?, ?)",
 				[{sql_integer, [User]},
 				 {sql_integer, [Table]},
 				 {sql_integer, [Permission]}
-				]).
+				]),
+	report(1, "Permission changed", {User, Table, Permission}).
 
 logout_update(DBHandler, User) ->
 	{updated, _} = odbc:param_query(DBHandler, "UPDATE users SET logout_time = UNIX_TIMESTAMP() WHERE id = ?",
-				[{sql_integer, [User]}]).
+				[{sql_integer, [User]}]),
+	report(1, "Logout updated", {User}).
 
 get_readers(DBHandler, Table, _User) ->
 	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT reader_id FROM readers WHERE table_id = ?", 
