@@ -31,6 +31,8 @@
 -include("types.hrl").
 -include("enums.hrl").
 
+-import(parser).
+
 %% Handling:
 -export([start_link/1]).
 
@@ -164,28 +166,28 @@ proceed(Message, Buffer) ->
 
 %%% @doc Parse client data by packet type
 handle_packet(Type, Packet) when Type =:= ?CLIENT_REGISTER ->
-	{ok, Name, Password} = parse(register, Packet),
+	{Name, Password} = parser:parse("SS", Data),
 	do_register(Name, Password);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_LOGIN ->
-	{ok, Name, Password} = parse(login, Packet),
+	{Name, Password} = parser:parse("SS", Data),
 	do_login(Name, Password);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TABLE ->
-	{ok, TableId, Time, Name, Description} = parse(table_data, Packet),
+	{TableId, Time, Name, Description} = parser:parse("ILSS", Data),
 	create_new_table(TableId, Time, Name, Description);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TASK ->
-	{ok, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(task_data, Packet),
+	{TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parser:parse("IILSSs8s8"),
 	create_new_task(TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_TABLE_CHANGE ->
-	{ok, TableId, Time, Name, Description} = parse(table_data, Packet),
+	{TableId, Time, Name, Description} = parser:parse("ILSS", Data),
 	do_change_table(TableId, Time, Name, Description);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_TASK_CHANGE ->
-	{ok, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(task_data, Packet),
+	{TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parser:parse("IILSSs8s8"),
 	do_change_task(TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_PERMISSION ->
-	{ok, TableId, UserId, Permission} = parse(permission, Packet),
+	{TableId, UserId, Permission} = parser:parse("IIB", Data),
 	do_change_permission(TableId, UserId, Permission);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_COMMENTARY ->
-	{ok, TableId, TaskId, Time, Commentary} = parse(commentary, Packet),
+	{TableId, TaskId, Time, Commentary} = parser:parse("IILS"),
 	create_new_commentary(TableId, TaskId, Time, Commentary);
 handle_packet(Type, _) ->
 	report(1, "Wrong packet type", Type),
@@ -196,51 +198,6 @@ send(Type, Data, Socket) ->
 	report(1, "Sending back", Data),
 	Size = bit_size(Data),
 	gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
-
-parse(login, Data) ->
-	report(1, "Parse LOGIN packet"),
-	<<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
-	Name = binary_to_list(NameBin),
-	Password = binary_to_list(PasswordBin),
-	{ok, Name, Password};
-parse(register, Data) ->
-	report(1, "Parse registered packet"),
-	<<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
-	Name = binary_to_list(NameBin),
-	Password = binary_to_list(PasswordBin),
-	{ok, Name, Password};
-parse(table_data, Data) ->
-	report(1, "Parse NEW_TABLE packet"),
-	<<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
-	Name = binary_to_list(NameBin),
-	Description = binary_to_list(DescBin),
-	{ok, TableId, Time, Name, Description};
-parse(task_data, Data) ->
-	report(1, "Parse NEW_TASK packet"),
-	<<TaskId:?ID_LENGTH, TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
-		NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring,
-		DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring,
-		StartDateBin:?DATE_LENGTH/bitstring, EndDateBin:?DATE_LENGTH/bitstring,
-		StartTimeBin:?TIME_LENGTH/bitstring, EndTimeBin:?TIME_LENGTH/bitstring>> = Data,
-	Name = binary_to_list(NameBin),
-	Description = binary_to_list(DescBin),
-	StartDate = binary_to_list(StartDateBin),
-	EndDate = binary_to_list(EndDateBin),
-	StartTime = binary_to_list(StartTimeBin),
-	EndTime = binary_to_list(EndTimeBin),
-	{ok, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime};
-parse(permission, Data) ->
-	report(1, "Parse PERMISSION packet"),
-	<<TableId:?ID_LENGTH, UserId:?ID_LENGTH, Permission:8>> = Data,
-	{ok, TableId, UserId, Permission};
-parse(commentary, Data) ->
-	report(1, "Parse COMMENTARY packet"),
-	<<TaskId:?ID_LENGTH, TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, CommentLength:?STRING_LENGTH, CommentBin:CommentLength/bitstring>> = Data,
-	Commentary = binary_to_list(CommentBin),
-	{ok, TableId, TaskId, Time, Commentary};
-parse(_, _) ->
-	report(1, "Wrong parse packet call"),
-	{error}.
 
 do_login(Name, Password) ->
 	gen_server:cast(self(), {login, Name, Password}).
