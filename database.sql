@@ -1,5 +1,8 @@
 DROP DATABASE IF EXISTS schedule;
+
 CREATE DATABASE schedule;
+
+USE schedule;
 
 CREATE TABLE schedule.users (
 	id INT(10) AUTO_INCREMENT PRIMARY KEY,
@@ -8,6 +11,7 @@ CREATE TABLE schedule.users (
 
 	name VARCHAR(50) NOT NULL,
 
+	register_time INT(10) NOT NULL,
 	logout_time INT(10) NOT NULL,
 
 	UNIQUE(login) 
@@ -42,11 +46,12 @@ CREATE TABLE schedule.task_changes (
 	time INT(10) NOT NULL,
 	user_id INT(10) NOT NULL,
 
-	name VARCHAR(100),
-	description TEXT,
-	completion_date DATE, 
-	start_time TIME,
-	end_time TIME,
+	name VARCHAR(100) DEFAULT NULL,
+	description TEXT DEFAULT NULL,
+	start_date DATE DEFAULT NULL,
+	end_date DATE DEFAULT NULL,
+	start_time TIME DEFAULT NULL,
+	end_time TIME DEFAULT NULL,
 
 	FOREIGN KEY (table_id) REFERENCES tables(id),
 	FOREIGN KEY (task_id) REFERENCES tasks(id)
