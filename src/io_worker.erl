@@ -28,6 +28,9 @@
 -module(io_worker).
 -behaviour(gen_server).
 
+-import(jdb, [report/3, report/2, appenv/3, getenv/2]).
+-import(database, [load/3]).
+
 -include("types.hrl").
 -include("enums.hrl").
 
@@ -39,6 +42,14 @@
 -export([handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3]).
 
+-export([message/2]).
+
+%%% The worker state. Handles information about connection.
+-record(state, {
+	socket,
+	buffer,		% keep TCP packeet here until whole data received
+	user_id		% loggined user id
+}).
 
 %%% @spec start_link() -> Result
 %%%    Result = {ok,Pid} | ignore | {error,Error}
@@ -59,20 +70,30 @@ handle_call(Data, _From, State) ->
 	report(0, "Wrong sync event in IO", Data),
 	{reply, ok, State}.
 
-handle_cast({login, Name, Password}, State) ->
+%%% @spec handle_cast(Message, State) -> Result
+%%%		Message = term()
+%%%
+%%%		Result = {noreply, State} | {stop, normal, State}
+%%%		State = {socket, buffer, user_id}
+%%%
+%%%	@doc Handles asynchronous message to io_worker.
+%%%
+
+handle_cast({login, Name, Password, LastUpdateTime}, State) ->
 	report(1, "handle_cast LOGIN"),
-	case login(State#state.socket, Name, Password) of
+	case do_login(Name, Password) of
 		{error} ->
 			report(1, "Wrong auth data", {Name, Password}),
 			{noreply, State};
 		{ok, Id} ->
 			report(1, "User successfully logined in", {Id, Name, Password}),
 			NewState = State#state{user_id=Id},
+			sync(LastUpdateTime),
 			{noreply, NewState}
 	end;
 handle_cast({register, Name, Password}, State) ->
 	report(1, "handle_cast REGISTER"),
-	case register(State#state.socket, Name, Password) of
+	case do_register(Name, Password) of
 		{error} ->
 			report(1, "Duplicate user name", {Name, Password}),
 			{noreply, State};
@@ -81,29 +102,44 @@ handle_cast({register, Name, Password}, State) ->
 			NewState = State#state{user_id=Id},
 			{noreply, NewState}
 	end;
-handle_cast({new_table, TableId, Time, Name, Description}, State) ->
+
+handle_cast({new_table, Table}, State) ->
 	report(1, "handle_cast NEW_TABLE"),
-	new_table(State#state.socket, State#state.user_id, TableId, Time, Name, Description),
+	do_create(table, Table#table{creator_id=State#state.user_id}),
 	{noreply, State};
-handle_cast({new_task, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
+handle_cast({new_task, Task}, State) ->
 	report(1, "handle_cast NEW_TASK"),
-	new_task(State#state.socket, State#state.user_id, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	do_create(task, Task#task{creator_id=State#state.user_id}),
 	{noreply, State};
-handle_cast({new_commentary, TableId, TaskId, Time, Commentary}, State) ->
-	report(1, "handle_cast NEW_COMMENTARY"),
-	ok = new_commentary(State#state.user_id, TableId, TaskId, Time, Commentary),
+handle_cast({new_comment, Comment}, State) ->
+	report(1, "handle_cast NEW_Comment"),
+	do_create(comment, Comment#comment{creator_id=State#state.user_id}),
 	{noreply, State};
-handle_cast({table_change, TableId, Time, Name, Description}, State) ->
+handle_cast({table_change, Table}, State) ->
 	report(1, "handle_cast TABLE_CHANGE"),
-	ok = table_change(State#state.user_id, TableId, Time, Name, Description),
+	do_change(table, Table#table{creator_id=State#state.user_id}),
 	{noreply, State};
-handle_cast({task_change, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}, State) ->
+handle_cast({task_change, Task}, State) ->
 	report(1, "handle_cast TASK_CHANGE"),
-	ok = task_change(State#state.user_id, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
+	do_change(task, Task#task{creator_id=State#state.user_id}),
 	{noreply, State};
-handle_cast({permission_change, TableId, ReaderId, Permission}, State) ->
+handle_cast({permission_change, Permission}, State) ->
 	report(1, "handle_cast PERMISSION"),
-	ok = permission_change(State#state.user_id, TableId, ReaderId, Permission),
+	do_change(permission, Permission#permission{creator_id=State#state.user_id}),
+	{noreply, State};
+
+handle_cast({message_table, Table}, State) ->
+	report(1, "handle_cast Someone made table change"),
+	message(table, Table),
+	{noreply, State};
+handle_cast({message_task, Task}, State) ->
+	report(1, "handle_cast Someone made task change"),
+	message(task, Task),
+	{noreply, State};
+
+handle_cast({sync, FromTime}, State) ->
+	report(1, "handle_cast SYNC"),
+	do_sync(State#state.user_id, FromTime),
 	{noreply, State};
 handle_cast({send, Type, Data}, State) ->
 	send(Type, Data, State#state.socket),
@@ -137,9 +173,14 @@ code_change(_, State, _) ->
 
 %%% @spec proceed(Message, Buffer) -> Result
 %%%     Result = {ok, NewBuffer}
-%%%       NewBuffer = binary (left data from proceeded Buffer)
+%%%     NewBuffer = binary (left data from proceeded Buffer)
 %%%
-%%% @doc Handling received from client packets
+%%% @doc Handling received from client packets. Due to fragmentation of packets this
+%%% method collects received data (Message) into buffer (appends it to previously collected
+%%% data in Buffer). Method checks that information about packet's type, size and its data is 
+%%% already received. If it is true, it cuts packet data from buffer and proceeds it to
+%%% handle_packet() method.
+%%%
 proceed(Message, Buffer) ->
 	NewBuffer = <<Buffer/binary, Message/binary>>,
 	report(1, "New packet was received", NewBuffer),
@@ -165,28 +206,28 @@ proceed(Message, Buffer) ->
 %%% @doc Parse client data by packet type
 handle_packet(Type, Packet) when Type =:= ?CLIENT_REGISTER ->
 	{ok, Name, Password} = parse(register, Packet),
-	do_register(Name, Password);
+	register_new(Name, Password);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_LOGIN ->
-	{ok, Name, Password} = parse(login, Packet),
-	do_login(Name, Password);
+	{ok, Name, Password, LastUpdateTime} = parse(login, Packet),
+	login(Name, Password, LastUpdateTime);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TABLE ->
-	{ok, TableId, Time, Name, Description} = parse(table_data, Packet),
-	create_new_table(TableId, Time, Name, Description);
+	{ok, Table} = parse(table_data, Packet),
+	create(table, Table);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_NEW_TASK ->
-	{ok, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(task_data, Packet),
-	create_new_task(TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime);
+	{ok, Task} = parse(task_data, Packet),
+	create(task, Task);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_TABLE_CHANGE ->
-	{ok, TableId, Time, Name, Description} = parse(table_data, Packet),
-	do_change_table(TableId, Time, Name, Description);
+	{ok, Table} = parse(table_data, Packet),
+	change(table, Table);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_TASK_CHANGE ->
-	{ok, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime} = parse(task_data, Packet),
-	do_change_task(TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime);
+	{ok, Task} = parse(task_data, Packet),
+	change(task, Task);
 handle_packet(Type, Packet) when Type =:= ?CLIENT_PERMISSION ->
-	{ok, TableId, UserId, Permission} = parse(permission, Packet),
-	do_change_permission(TableId, UserId, Permission);
-handle_packet(Type, Packet) when Type =:= ?CLIENT_COMMENTARY ->
-	{ok, TableId, TaskId, Time, Commentary} = parse(commentary, Packet),
-	create_new_commentary(TableId, TaskId, Time, Commentary);
+	{ok, Permission} = parse(permission, Packet),
+	change(permission, Permission);
+handle_packet(Type, Packet) when Type =:= ?CLIENT_COMMENT ->
+	{ok, Comment} = parse(comment, Packet),
+	create(comment, Comment);
 handle_packet(Type, _) ->
 	report(1, "Wrong packet type", Type),
 	{stop, normal}.
@@ -194,15 +235,15 @@ handle_packet(Type, _) ->
 %%% @doc Sends message to socket
 send(Type, Data, Socket) ->
 	report(1, "Sending back", Data),
-	Size = bit_size(Data),
+	Size = byte_size(Data),
 	gen_tcp:send(Socket, <<Type:?TYPE_SIZE, Size:?PACKET_SIZE, Data/binary>>).
 
 parse(login, Data) ->
 	report(1, "Parse LOGIN packet"),
-	<<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
+	<<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring, LastUpdateTime:?UNIXTIME_LENGTH>> = Data,
 	Name = binary_to_list(NameBin),
 	Password = binary_to_list(PasswordBin),
-	{ok, Name, Password};
+	{ok, Name, Password, LastUpdateTime};
 parse(register, Data) ->
 	report(1, "Parse registered packet"),
 	<<NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, PasswordLength:?STRING_LENGTH, PasswordBin:PasswordLength/bitstring>> = Data,
@@ -214,122 +255,179 @@ parse(table_data, Data) ->
 	<<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring, DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring>> = Data,
 	Name = binary_to_list(NameBin),
 	Description = binary_to_list(DescBin),
-	{ok, TableId, Time, Name, Description};
+	{ok, #table{id=TableId, time=Time, name=Name, description=Description}};
 parse(task_data, Data) ->
 	report(1, "Parse NEW_TASK packet"),
 	<<TaskId:?ID_LENGTH, TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
 		NameLength:?STRING_LENGTH, NameBin:NameLength/bitstring,
 		DescLength:?STRING_LENGTH, DescBin:DescLength/bitstring,
 		StartDateBin:?DATE_LENGTH/bitstring, EndDateBin:?DATE_LENGTH/bitstring,
-		StartTimeBin:?TIME_LENGTH/bitstring, EndTimeBin:?TIME_LENGTH/bitstring>> = Data,
+		StartTimeBin:?TIME_LENGTH/bitstring, EndTimeBin:?TIME_LENGTH/bitstring, Period:8>> = Data,
 	Name = binary_to_list(NameBin),
 	Description = binary_to_list(DescBin),
 	StartDate = binary_to_list(StartDateBin),
 	EndDate = binary_to_list(EndDateBin),
 	StartTime = binary_to_list(StartTimeBin),
 	EndTime = binary_to_list(EndTimeBin),
-	{ok, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime};
+	{ok, #task{id=TaskId, table_id=TableId, time=Time, name=Name, description=Description, start_date=StartDate, end_date=EndDate, start_time=StartTime, end_time=EndTime, period=Period}};
 parse(permission, Data) ->
 	report(1, "Parse PERMISSION packet"),
 	<<TableId:?ID_LENGTH, UserId:?ID_LENGTH, Permission:8>> = Data,
-	{ok, TableId, UserId, Permission};
-parse(commentary, Data) ->
-	report(1, "Parse COMMENTARY packet"),
+	{ok, #permission{table_id=TableId, user_id=UserId, permission=Permission}};
+parse(comment, Data) ->
+	report(1, "Parse Comment packet"),
 	<<TaskId:?ID_LENGTH, TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, CommentLength:?STRING_LENGTH, CommentBin:CommentLength/bitstring>> = Data,
-	Commentary = binary_to_list(CommentBin),
-	{ok, TableId, TaskId, Time, Commentary};
+	Text = binary_to_list(CommentBin),
+	{ok, #comment{table_id=TableId, task_id=TaskId, time=Time, text=Text}};
 parse(_, _) ->
 	report(1, "Wrong parse packet call"),
 	{error}.
 
-do_login(Name, Password) ->
-	gen_server:cast(self(), {login, Name, Password}).
-do_register(Name, Password) ->
+login(Name, Password, LastUpdateTime) ->
+	gen_server:cast(self(), {login, Name, Password, LastUpdateTime}).
+register_new(Name, Password) ->
 	gen_server:cast(self(), {register, Name, Password}).
-create_new_table(TaskId, Time, Name, Description) ->
-	gen_server:cast(self(), {new_table, TaskId, Time, Name, Description}).
-create_new_task(TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	gen_server:cast(self(), {new_task, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
-create_new_commentary(TableId, TaskId, Time, Commentary) ->
-	gen_server:cast(self(), {new_commentary, TableId, TaskId, Time, Commentary}).
-do_change_table(TableId, Time, Name, Description) ->
-	gen_server:cast(self(), {table_change, TableId, Time, Name, Description}).
-do_change_task(TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	gen_server:cast(self(), {task_change, TaskId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime}).
-do_change_permission(TableId, UserId, Permission) ->
-	gen_server:cast(self(), {permission_change, TableId, UserId, Permission}).
+create(table, Table) ->
+	gen_server:cast(self(), {new_table, Table});
+create(task, Task) ->
+	gen_server:cast(self(), {new_task, Task});
+create(comment, Comment) ->
+	gen_server:cast(self(), {new_Comment, Comment}).
+change(table, Table) ->
+	gen_server:cast(self(), {table_change, Table});
+change(task, Task) ->
+	gen_server:cast(self(), {task_change, Task});
+change(permission, Permission) ->
+	gen_server:cast(self(), {permission_change, Permission}).
+send(Type, Data) ->
+	gen_server:cast(self(), {send, Type, Data}).
+sync(FromTime) ->
+	gen_server:cast(self(), {sync, FromTime}).
 
-register(Socket, Name, Password) ->
+
+%%% Hidden methods. Called only by io_worker itself.
+%%% It is doing real work.
+%%%
+
+do_register(Name, Password) ->
 	report(1, "Registering", Name),
 	case database:check_username(Name) of
 		error ->
 			database:register(Name, Password),
 			report(1, "New user registered", Name),
-			send(?SERVER_REGISTER, <<?REGISTER_SUCCESS:8>>, Socket),
-			login(Socket, Name, Password);
+			send(?SERVER_REGISTER, <<?REGISTER_SUCCESS:8>>),
+			login(Name, Password, 0);
 		_ ->
-			send(?SERVER_REGISTER, <<?REGISTER_FAILURE:8>>, Socket),
+			send(?SERVER_REGISTER, <<?REGISTER_FAILURE:8>>),
 			{error}
 	end.
 
-login(Socket, Name, Password) ->
+do_login(Name, Password) ->
 	report(1, "Logining in", Name),
 	case database:auth(Name, Password) of
 		error ->
 			Answer = <<?LOGIN_FAILURE:8>>,
-			send(?SERVER_LOGIN, Answer, Socket),
+			send(?SERVER_LOGIN, Answer),
 			{error};
 		{ok, Id} ->
 			Answer = <<?LOGIN_SUCCESS:8, Id:?ID_LENGTH>>,
 			report(1, "User logined in", Name),
-			send(?SERVER_LOGIN, Answer, Socket),
+			send(?SERVER_LOGIN, Answer),
 			clients:add(Id, self()),
 			{ok, Id}
 	end.
 
-new_table(Socket, UserId, TableClientId, Time, Name, Description) ->
-	{ok, TableId} = database:create_new_table(UserId, Time, Name, Description),
-	send(?SERVER_GLOBAL_TABLE, <<TableClientId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket),
-	clients:update(table, {TableId, Time, UserId, Name, Description}).
-new_task(Socket, UserId, TaskClientId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	{ok, TaskId} = database:create_new_task(UserId, TableId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
-	send(?SERVER_GLOBAL_TASK, <<TaskClientId:?ID_LENGTH, TaskId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket),
-	clients:update(task, {TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime}).
-new_commentary(UserId, TableId, TaskId, Time, Commentary) ->
-	case database:check_permission(UserId, TableId, ?PERMISSION_READ) of
+%%% Called via client packets. It creates new data.
+
+do_create(table, Table) ->
+	{ok, Id} = database:create(table, Table),
+	%send(?SERVER_GLOBAL_TABLE, <<TableClientId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket),
+	clients:update(table, Table#table{id=Id});
+
+do_create(task, Task) ->
+	{ok, Id} = database:create(task, Task),
+	%send(?SERVER_GLOBAL_TASK, <<TaskClientId:?ID_LENGTH, TaskId:?ID_LENGTH, TableId:?ID_LENGTH>>, Socket),
+	clients:update(task, Task#task{id=Id});
+
+do_create(comment, Comment) ->
+	case database:check_permission(Comment#comment.creator_id, Comment#comment.table_id, ?PERMISSION_READ) of
 		true ->
-			database:create_commentary(UserId, TableId, TaskId, Time, Commentary),
-			clients:update(comment, {TableId, TaskId, Time, UserId, Commentary});
+			data_changed(comment, Comment);
 		false ->
-			report(1, "User do not have permission to create commentary", {UserId, TableId})
+			report(1, "User do not have permission to create Comment", {Comment#comment.creator_id, Comment#comment.table_id})
 	end.
-table_change(UserId, TableId, Time, Name, Description) ->
-	case database:check_permission(UserId, TableId, ?PERMISSION_WRITE) of
+
+do_change(table, Table) ->
+	case database:check_permission(Table#table.creator_id, Table#table.id, ?PERMISSION_WRITE) of
 		true ->
-			database:change_table(UserId, TableId, Time, Name, Description),
-			clients:update(table, {TableId, Time, UserId, Name, Description});
+			data_changed(table, Table);
 		false ->
-			report(1, "User do not have permission to change table", {UserId, TableId})
-	end.
-task_change(UserId, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	case database:check_permission(UserId, TableId, ?PERMISSION_WRITE) of
+			report(1, "User do not have permission to change table", {Table#table.creator_id, Table#table.id})
+	end;
+
+do_change(task, Task) ->
+	case database:check_permission(Task#task.creator_id, Task#task.table_id, ?PERMISSION_WRITE) of
 		true ->
-			database:change_task(UserId, TableId, TaskId, Time, Name, Description, StartDate, EndDate, StartTime, EndTime),
-			clients:update(task, {TableId, TaskId, Time, UserId, Description, StartDate, EndDate, StartTime, EndTime});
+			data_changed(task, Task);
 		false ->
-			report(1, "User do not have permission to change task", {UserId, TableId})
-	end.
-permission_change(UserId, TableId, ReaderId, Permission) ->
-	case database:check_permission(UserId, TableId, ?PERMISSION_WRITE) of
+			report(1, "User do not have permission to change task", {Task#task.creator_id, Task#task.table_id})
+	end;
+
+do_change(permission, Permission) ->
+	case database:check_permission(Permission#permission.creator_id, Permission#permission.table_id, ?PERMISSION_WRITE) of
 		true ->
-			database:change_permission(UserId, TableId, ReaderId, Permission),
-			clients:update(permission, {TableId, UserId, ReaderId, Permission});
+			data_changed(permission, Permission);
 		false ->
-			report(1, "User do not have permission to change permissions", {UserId, TableId})
+			report(1, "User do not have permission to change permissions", {Permission#permission.creator_id, Permission#permission.table_id})
 	end.
+
+data_changed(Type, Data) ->
+	database:change(Type, Data),
+	clients:update(Type, Data).
 
 logout(UserId) ->
 	if 
 		UserId == undefined -> ok;
 		true -> clients:remove(UserId)
 	end.
+
+%%%
+%%% Called via clients
+%%%
+message(table, Table) ->
+	report(1, "Sending message about created table"),
+	TableId = Table#table.id,
+	Time = Table#table.time,
+	CreatorId = Table#table.creator_id,
+	NameBin = list_to_binary(Table#table.name),
+	NameLength = string:len(Table#table.name),
+	DescBin = list_to_binary(Table#table.description),
+	DescriptionLength = string:len(Table#table.description),
+	send(?SERVER_CHANGE_TABLE, <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, CreatorId:?ID_LENGTH, 
+		NameLength:?STRING_LENGTH, NameBin/binary, DescriptionLength:?STRING_LENGTH, DescBin/binary>>);
+
+message(task, Task) ->
+	TableId = Task#task.id,
+	TaskId = Task#task.id,
+	Time = Task#task.time,
+	CreatorId = Task#task.creator_id,
+	Period = Task#task.period,
+	NameBin = list_to_binary(Task#task.name),
+	NameLength = string:len(Task#task.name),
+	DescriptionLength = string:len(Task#task.description),
+	DescBin = list_to_binary(Task#task.description),
+	StartDateBin = list_to_binary(Task#task.start_date),
+	EndDateBin = list_to_binary(Task#task.end_date),
+	StartTimeBin = list_to_binary(Task#task.start_time),
+	EndTimeBin = list_to_binary(Task#task.end_time),
+	send(?SERVER_CHANGE_TASK, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, CreatorId:?ID_LENGTH, 
+		NameLength:?STRING_LENGTH, NameBin/binary, DescriptionLength:?STRING_LENGTH, DescBin/binary,
+		StartDateBin/binary, EndDateBin/binary, StartTimeBin/binary, EndTimeBin/binary, Period:8>>).
+
+sync_data(ListDataAtom, DataAtom, UserId, FromTime) ->
+	Data = database:load(ListDataAtom, UserId, FromTime),
+	lists:foreach(fun(Element) -> message(DataAtom, Element) end, Data).
+
+do_sync(UserId, FromTime) ->
+	sync_data(tables, table, UserId, FromTime),
+	sync_data(tasks, task, UserId, FromTime).

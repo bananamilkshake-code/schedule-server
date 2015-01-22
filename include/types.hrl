@@ -19,15 +19,39 @@
 %%  Author: Elizaveta Lukicheva <mailto: liza.lukicheva@gmail.com>
 %%  License: <http://www.gnu.org/licenses/gpl.html>
 
--import(jdb, [report/3, report/2, appenv/3, getenv/2]).
+-record(table, {
+	id,
+	time,
+	creator_id,
+	name,
+	description
+}).
 
-%%% The TCP message received via an active gen_tcp socket.
--record(tcp, {
-      socket, 
-      data}).
+-record(task, {
+	id,
+	table_id,
+	time,
+	creator_id,
+	name,
+	description,
+	start_date,
+	end_date,
+	start_time,
+	end_time,
+	period
+}).
 
-%%% The worker state. Handles information about connection
--record(state, {
-      socket,
-      buffer,   % keep TCP packeet here until whole data received
-      user_id}).   % loggined user id
+-record(comment, {
+	table_id,
+	task_id,
+	time,
+	creator_id,
+	text
+}).
+
+-record(permission, {
+	table_id,
+	creator_id,
+	user_id,
+	permission
+}).

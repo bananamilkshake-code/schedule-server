@@ -62,7 +62,7 @@
 			env, 
 			[
 				{logfile, {open, "../log.txt"}},
-				{database_params, "DSN=mysql;DRIVER=MySQL;UID=root;PWD=finncrisporiginal;DATABASE=schedule"},
+				{database_params, "DRIVER=MySQL;UID=root;PWD=tiny blue horse;DATABASE=schedule"},
 				{loglevel, 1},
 				{tcp_port, 4567},    % which port socket must bind.
 				{max_token, 999999 },   % maximum token to generate.
@@ -76,7 +76,8 @@
 			[
 				kernel,
 				stdlib,
-				sasl
+				sasl,
+				odbc
 			]
 		}
 	]

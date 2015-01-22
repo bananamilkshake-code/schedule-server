@@ -26,6 +26,9 @@
 
 -module(acceptor).
 -behaviour(gen_server).
+
+-import(jdb, [report/3, report/2, appenv/3, getenv/2]).
+
 -include("types.hrl").
 
 %% Callbacks:

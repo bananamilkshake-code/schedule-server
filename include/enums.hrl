@@ -52,7 +52,7 @@
 -define(CLIENT_TABLE_CHANGE,4).
 -define(CLIENT_TASK_CHANGE,	5).
 -define(CLIENT_PERMISSION,	6).
--define(CLIENT_COMMENTARY,	7).
+-define(CLIENT_COMMENT,		7).
 
 %%% Register status
 -define(REGISTER_SUCCESS, 0).

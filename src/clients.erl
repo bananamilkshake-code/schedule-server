@@ -21,6 +21,8 @@
 
 -module(clients).
 -behaviour(gen_server).
+
+-include("types.hrl").
 -include("enums.hrl").
 
 -export([add/2, remove/1, update/2]).
@@ -38,11 +40,11 @@
 -record(client, {
 	id, 		%% Integer
 	io_handler 	%% io_worker
-	}).
+}).
 
 -record(state, {
 	clients_storage	%% list of "client"
-	}).
+}).
 
 start_link(Args) ->
 	report(1, "Starting clients storage"),
@@ -79,17 +81,17 @@ handle_cast({remove, Id}, State) ->
 	database:logout_update(Id),
 	report(1, "Client removed", Id),
 	{noreply, State};
-handle_cast({table, {TableId, Time, UserId, Name, Description}}, State) ->
-	table(State#state.clients_storage, TableId, Time, UserId, Name, Description),
+handle_cast({table, Table}, State) ->
+	table(State#state.clients_storage, Table),
 	{noreply, State};
-handle_cast({task, {TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime}}, State) ->
-	task(State#state.clients_storage, TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime),
+handle_cast({task, Task}, State) ->
+	task(State#state.clients_storage, Task),
 	{noreply, State};
-handle_cast({comment, {TableId, TaskId, Time, UserId, Commentary}}, State) ->
-	comment(State#state.clients_storage, TableId, TaskId, Time, UserId, Commentary),
+handle_cast({comment, Commentary}, State) ->
+	comment(State#state.clients_storage, Commentary),
 	{noreply, State};
-handle_cast({permission, {TableId, UserId, ReaderId, Permission}}, State) ->
-	permission(State#state.clients_storage, TableId, UserId, ReaderId, Permission),
+handle_cast({permission, Permission}, State) ->
+	permission(State#state.clients_storage, Permission),
 	{noreply, State};
 handle_cast(_, State) ->
 	report(1, "Unexpected clients cast"),
@@ -100,8 +102,8 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %% Private methods
-online_users(TableId, UserId, Clients) ->
-	Users = database:get_readers_for(TableId, UserId),
+online_users(TableId, Clients) ->
+	Users = database:get_readers_for(TableId),
 	report(1, "Users", Users),
 	lists:foldl(fun(User, OnlineClients) ->
 		case ets:lookup(Clients, User) of
@@ -109,42 +111,23 @@ online_users(TableId, UserId, Clients) ->
 			[] -> OnlineClients
 		end end, [], Users).
 
-send(Clients, Type, Packet) ->
-	lists:foreach(fun(IoClient) -> io_worker:cast(IoClient, {send, Type, Packet}) end, Clients).
+message(Clients, TableId, Message) ->
+	Sockets = online_users(TableId, Clients),
+	lists:foreach(fun(IoClient) -> io_worker:cast(IoClient, Message) end, Sockets).
 
-table(Clients, TableId, Time, UserId, Name, Description) ->
-	Sockets = online_users(TableId, UserId, Clients),
-	NameBin = list_to_binary(Name),
-	NameLength = string:len(Name),
-	DescBin = list_to_binary(Description),
-	DescriptionLength = string:len(Description),
-	send(Sockets, ?SERVER_CHANGE_TABLE, <<TableId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, UserId:?ID_LENGTH, 
-		NameLength:?STRING_LENGTH, NameBin/binary, DescriptionLength:?STRING_LENGTH, DescBin/binary>>).
+table(Clients, Table) ->
+	message(Clients, Table#table.id, {message_table, Table}).
 
-task(Clients, TableId, TaskId, Time, UserId, Name, Description, StartDate, EndDate, StartTime, EndTime) ->
-	Sockets = online_users(TableId, UserId, Clients),
-	NameBin = list_to_binary(Name),
-	NameLength = string:len(Name),
-	DescriptionLength = string:len(Description),
-	DescBin = list_to_binary(Description),
-	StartDateBin = list_to_binary(StartDate),
-	EndDateBin = list_to_binary(EndDate),
-	StartTimeBin = list_to_binary(StartTime),
-	EndTimeBin = list_to_binary(EndTime),
-	send(Sockets, ?SERVER_CHANGE_TASK, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, UserId:?ID_LENGTH, 
-		NameLength:?STRING_LENGTH, NameBin/binary, DescriptionLength:?STRING_LENGTH, DescBin/binary,
-		StartDateBin/binary, EndDateBin/binary, StartTimeBin/binary, EndTimeBin/binary>>).
+task(Clients, Task) ->
+	message(Clients, Task#task.table_id, {message_task, Task}).
 
-comment(Clients, TableId, TaskId, Time, UserId, Commentary) ->
-	Sockets = online_users(TableId, UserId, Clients),
-	CommentLength = string:len(Commentary),
-	CommentaryBin = list_to_binary(Commentary),
-	send(Sockets, ?SERVER_COMMENTARY, <<TableId:?ID_LENGTH, TaskId:?ID_LENGTH, Time:?UNIXTIME_LENGTH, 
-		UserId:?ID_LENGTH, CommentLength:?STRING_LENGTH, CommentaryBin/binary>>).
+comment(_Clients, _Commentary) ->
+	%message(Clients, {message_commentary, TableId, TaskId, Time, UserId, Comment}).
+	ok.
 
-permission(Clients, TableId, UserId, ReaderId, Permission) ->
-	Sockets = online_users(TableId, UserId, Clients),
-	send(Sockets, ?SERVER_PERMISSION, <<TableId:?ID_LENGTH, ReaderId:?ID_LENGTH, Permission:8>>).
+permission(_Clients, _Permission) ->
+	%message(Clients, {message_permission, TableId, ReaderId, Permission}).
+	ok.
 
 %% Public methods
 
@@ -153,11 +136,5 @@ add(Id, IOHandler) ->
 remove(Id) ->
 	gen_server:cast(?MODULE, {remove, Id}).
 
-update(table, Data) ->
-	gen_server:cast(?MODULE, {table, Data});
-update(task, Data) ->
-	gen_server:cast(?MODULE, {task, Data});
-update(comment, Data) ->
-	gen_server:cast(?MODULE, {comment, Data});
-update(permission, Data) ->
-	gen_server:cast(?MODULE, {permission, Data}).
+update(Info, Data) ->
+	gen_server:cast(?MODULE, {Info, Data}).
