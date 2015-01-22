@@ -1,7 +1,10 @@
 {release,
 	{"schedule-release", "0.1"},
 	{erts, "5.8.5"},
-	[{kernel, "2.16.2"},
-	 {stdlib, "1.19.2"},
-	 {sasl, "2.3.2"},
-	 {schedule, "0.1"}]}.
+	[
+		{kernel, "2.16.4"},
+		{stdlib, "1.19.4"},
+		{sasl, "2.3.4"},
+		{schedule, "0.1"}
+	]
+}.
