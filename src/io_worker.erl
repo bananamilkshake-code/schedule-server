@@ -426,6 +426,7 @@ message(task, Task) ->
 
 sync_data(ListDataAtom, DataAtom, UserId, FromTime) ->
 	Data = database:load(ListDataAtom, UserId, FromTime),
+	report(1, "Sync data with client", {DataAtom, UserId, Data}),
 	lists:foreach(fun(Element) -> message(DataAtom, Element) end, Data).
 
 do_sync(UserId, FromTime) ->

@@ -86,6 +86,9 @@ handle_call({create, Type, Data}, _From, DBHandler) ->
 handle_call({change, Type, Data}, _From, DBHandler) ->
 	Ret = change(Type, DBHandler, Data),
 	{reply, Ret, DBHandler};
+handle_call({load, Type, UserId, FromTime}, _From, DBHandler) ->
+	Ret = load(Type, DBHandler, UserId, FromTime),
+	{reply, Ret, DBHandler};
 handle_call({get_readers, TableId}, _From, DBHandler) ->
 	Ret = get_readers(DBHandler, TableId),
 	{reply, Ret, DBHandler};
@@ -133,14 +136,12 @@ create(comment, Comment) ->
 	report(1, "Create new comment", Comment),
 	gen_server:cast(?MODULE, {create, comment, Comment}).
 
-load(tables, _UserId, _FromTime) ->
-	[];
-load(tasks, _UserId, _FromTime) ->
-	[].
-
 change(Type, Data) ->
 	report(1, "Changing", {Type, Data}),
 	gen_server:cast(?MODULE, {change, Type, Data}).
+load(Type, UserId, FromTime) ->
+	report(1, "Loading", {Type, UserId, FromTime}),
+	gen_server:call(?MODULE, {load, Type, UserId, FromTime}).
 logout_update(User) ->
 	gen_server:cast(?MODULE, {logout_update, User}).
 get_readers_for(Table) ->
@@ -174,7 +175,7 @@ create(table, DBHandler, TableData) ->
 	{ok, Id} = get_first_column(Rows, error),
 	Table = TableData#table{id=Id},
 	change(table, Table),
-	change(permission, Table, ?PERMISSION_WRITE),
+	change(permission, DBHandler, #permission{permission=?PERMISSION_WRITE, table_id=Id, user_id=Table#table.creator_id, creator_id=Table#table.creator_id}),
 	report(1, "New table added", {Id, Table}),
 	{ok, Id};
 
@@ -233,6 +234,26 @@ change(permission, DBHandler, Permission) ->
 				 {sql_integer, [Permission#permission.permission]}
 				]),
 	report(1, "Permission changed", Permission).
+
+load(tables, DBHandler, UserId, FromTime) ->
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT * FROM table_changes WHERE user_id = ? AND time > ? ORDER BY time",
+		[{sql_integer, [UserId]},
+		 {sql_integer, [FromTime]}]),
+	report(1, "Tables loaded", Rows),
+	lists:flatmap(fun({TableId, Time, CreatorId, Name, Desc}) ->
+					report(1, "Parsed", {TableId, Time, CreatorId, Name, Desc}),
+					[#table{id=TableId, time=Time, creator_id=CreatorId, name=Name, description=Desc}]
+					end,
+				Rows);
+
+load(tasks, DBHandler, UserId, FromTime) ->
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT * FROM task_changes WHERE user_id = ? AND time > ? ORDER BY time",
+		[{sql_integer, [UserId]},
+		 {sql_integer, [FromTime]}]),
+	lists:flatmap(fun({TaskId, TableId, Time, CreatorId, Name, Desc, StartDate, EndDate, StartTime, EndTime, Period}) ->
+					[#task{id=TaskId, table_id=TableId, time=Time, creator_id=CreatorId, name=Name, description=Desc, start_date=StartDate, end_date=EndDate, start_time=StartTime, end_time=EndTime, period=Period}]
+					end,
+				Rows).
 
 logout_update(DBHandler, User) ->
 	{updated, _} = odbc:param_query(DBHandler, "UPDATE users SET logout_time = UNIX_TIMESTAMP() WHERE id = ?",
