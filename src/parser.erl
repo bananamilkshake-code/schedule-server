@@ -90,24 +90,31 @@ parse_left(task, Data, Task) ->
 	case Type of 
 		?TASK_DATA_NAME ->
 			{Name, LeftData} = retrieve(string, Left),
+			report(1, "Task name parsed", {Name}),
 			parse_left(task, LeftData, Task#task{name=Name});
 		?TASK_DATA_DESC ->
 			{Description, LeftData} = retrieve(string, Left),
+			report(1, "Task description parsed", {Description}),
 			parse_left(task, LeftData, Task#task{description=Description});
 		?TASK_DATA_START_DATE ->
 			{StartDate, LeftData} = retrieve(string, Left),
+			report(1, "Task start_date parsed", {StartDate}),
 			parse_left(task, LeftData, Task#task{start_date=StartDate});
 		?TASK_DATA_END_DATE ->
 			{EndDate, LeftData} = retrieve(string, Left),
+			report(1, "Task end_date parsed", {EndDate}),
 			parse_left(task, LeftData, Task#task{end_date=EndDate});
 		?TASK_DATA_START_TIME ->
 			{StartTime, LeftData} = retrieve(string, Left),
+			report(1, "Task start_time parsed", {StartTime}),
 			parse_left(task, LeftData, Task#task{start_time=StartTime});
 		?TASK_DATA_END_TIME ->
 			{EndTime, LeftData} = retrieve(string, Left),
+			report(1, "Task end_time parsed", {EndTime}),
 			parse_left(task, LeftData, Task#task{end_time=EndTime});
 		?TASK_DATA_PERIOD ->
-			{Period, LeftData} = retrieve(byte, Left),
+			{Period, LeftData} = retrieve(short, Left),
+			report(1, "Task period parsed", {Period}),
 			parse_left(task, LeftData, Task#task{period=Period})
 	end.
 
@@ -115,6 +122,6 @@ retrieve(string, Data) ->
 	<<Length:?STRING_LENGTH, StringBin:Length/bitstring, Left/binary>> = Data,
 	Value = binary_to_list(StringBin),
 	{Value, Left};
-retrieve(byte, Data) ->
-	<<Value:8, Left/binary>> = Data,
+retrieve(short, Data) ->
+	<<Value:16, Left/binary>> = Data,
 	{Value, Left}.
