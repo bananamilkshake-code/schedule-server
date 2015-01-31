@@ -104,7 +104,6 @@ code_change(_OldVsn, State, _Extra) ->
 %% Private methods
 online_users(TableId, Clients) ->
 	Users = database:get_readers_for(TableId),
-	report(1, "Users", Users),
 	lists:foldl(fun(User, OnlineClients) ->
 		case ets:lookup(Clients, User) of
 			[Client] ->	lists:append(OnlineClients, Client#client.io_handler);
@@ -113,6 +112,7 @@ online_users(TableId, Clients) ->
 
 message(Clients, TableId, Message) ->
 	Sockets = online_users(TableId, Clients),
+	report(1, "Messaging users", Sockets),
 	lists:foreach(fun(IoClient) -> io_worker:cast(IoClient, Message) end, Sockets).
 
 table(Clients, Table) ->

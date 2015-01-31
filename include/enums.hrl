@@ -66,3 +66,16 @@
 -define(PERMISSION_NONE, 0).
 -define(PERMISSION_READ, 1).
 -define(PERMISSION_WRITE, 2).
+
+%%% Ids of table data in packet
+-define(TABLE_DATA_NAME, 0).
+-define(TABLE_DATA_DESC, 1).
+
+%%% Ids of task data in packet
+-define(TASK_DATA_NAME, 0).
+-define(TASK_DATA_DESC, 1).
+-define(TASK_DATA_START_DATE, 2).
+-define(TASK_DATA_END_DATE, 3).
+-define(TASK_DATA_START_TIME, 4).
+-define(TASK_DATA_END_TIME, 5).
+-define(TASK_DATA_PERIOD, 6).
