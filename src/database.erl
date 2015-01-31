@@ -171,24 +171,30 @@ auth(DBHandler, Login, Password) ->
 
 create(table, DBHandler, TableData) ->
 	{updated, _} = odbc:sql_query(DBHandler, "INSERT INTO tables VALUES()"),
-	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT max(id) AS last_id FROM tables"),
-	{ok, Id} = get_first_column(Rows, error),
+	{selected, _Cols, Rows} = odbc:sql_query(DBHandler, "SELECT MAX(id) AS last_id FROM tables"),
+	{ok, Id} = get_first_column(Rows, error),{ok, TableDesc} = 
 	Table = TableData#table{id=Id},
 	change(table, Table),
-	change(permission, DBHandler, #permission{permission=?PERMISSION_WRITE, table_id=Id, user_id=Table#table.creator_id, creator_id=Table#table.creator_id}),
+	change(permission, #permission{permission=?PERMISSION_WRITE, table_id=Id, user_id=Table#table.creator_id, creator_id=Table#table.creator_id}),
 	report(1, "New table added", {Id, Table}),
 	{ok, Id};
 
 create(task, DBHandler, TaskData) ->
-	{selected, _Cols, Rows} = odbc:param_query(DBHandler, "SELECT CAST(COALESCE(MAX(id), 0) + 1 AS UNSIGNED) AS last_id FROM tasks WHERE table_id = ?", [{sql_integer, [TaskData#task.table_id]}]),
-	{ok, Id} = get_first_column(Rows, error),
+	{selected, _Cols, Rows} = odbc:param_query(DBHandler, 
+		"SELECT CAST(COALESCE(MAX(id), 0) + 1 AS UNSIGNED) AS last_id FROM tasks WHERE table_id = ?",
+			[{sql_integer, [TaskData#task.table_id]}
+		]),
+	% There is some bug in odbc driver that returns string type from COALESCE result
+	% instead of integer. If you check in MySQL what type must be returned in that query, it will be integer.
+	{ok, IdStr} = get_first_column(Rows, error),
+	{Id, _} = string:to_integer(IdStr),
 	Task = TaskData#task{id=Id},
 	{updated, _} = odbc:param_query(DBHandler, "INSERT INTO tasks(id, table_id) VALUES(?,?)", 
 				[{sql_integer, [Task#task.id]},
 				 {sql_integer, [Task#task.table_id]}
 				]),
-	change(task, DBHandler, Task),
 	report(1, "New task added", {Id, Task}),
+	change(task, Task),
 	{ok, Id};
 
 create(comment, DBHandler, Comment) ->
