@@ -1,5 +1,15 @@
-Запуск:
+## Overview ##
+
+This is server application for project [schedule-android-client](https://bitbucket.org/bananamilkshake/schedule-android-client).
+
+
+## Run ##
+
+```
+#!erlang
+
 elr -pa ebin
 
 application:start(sasl).
 application:start(schedule).
+```
